@@ -26,6 +26,7 @@ The build generates PNG icons and a hashed offline asset manifest. Visit online 
 ## Features
 
 - Personal habits with categories, colors, descriptions, daily targets, time-of-day grouping, and selected weekdays.
+- English and Spanish interface, selected initially from the device language and remembered when changed; dates and scheduled push copy follow the selected language.
 - One-tap progress and undo, historical check-ins, search, completion filters, archive/restore.
 - Calendar-local dates, scheduled-day streaks, 12-week activity view, weekly completion rates, and JSON export.
 - Optional Google sign-in and Firestore sync, durable local outbox, automatic retry on reconnect/focus and every 30 seconds.
@@ -66,6 +67,8 @@ Do not consider local/emulator success proof that production credentials or devi
 - Verify the test push and a scheduled reminder while the app is closed on target desktop, Android, and installed iOS devices; test completed/archived suppression, disable, and sign-out.
 - Check public `/robots.txt`, `/sitemap.xml`, canonical and social cards; use a social debugger against the deployed URL.
 - Configure scheduler error alerts and monitor sync/push errors, Firestore usage, worker limits, and storage/backups.
+
+The interface defaults to Spanish when the browser's preferred languages include Spanish, otherwise English. A manual selection in Settings persists on that device and synchronizes the document language; scheduled push reminders use the app language the next time their settings are saved. The public Privacy Policy and Terms are still published in English, with an explicit notice when Spanish is selected.
 
 The repository includes automated unit and Firestore/Auth-emulator checks. Live credentials, public social crawler access, OS push delivery, and hosting scheduler behavior still require the deployment acceptance checks above.
 

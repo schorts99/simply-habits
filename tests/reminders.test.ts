@@ -17,6 +17,14 @@ describe("Reminder planning", () => {
     expect(events.some(e => e.body.includes("Private habit"))).toBe(false);
     expect(dueReminders("device", "user", prefs, [habit.toPrimitives()], new Date("2026-11-01T16:10:00Z"), 0)).toEqual([]);
   });
+  it("uses the saved device language for private reminder and encouragement copy", () => {
+    const now = new Date("2026-11-01T16:04:00Z");
+    const events = dueReminders("device", "user", { ...prefs, language: "es" }, [habit.toPrimitives()], now, 0);
+    expect(events[0]).toMatchObject({ title: "Un pequeño momento para ti", body: "Uno de tus hábitos programados te está esperando. Abre Simply Habits para registrarlo." });
+    expect(events[1].title).toBe("Pequeños pasos. Buenos días.");
+    expect(events[1].body).toMatch(/^(Un pequeño paso|No necesitas|Vuelve a empezar|La constancia|Respira|Tus hábitos|Pequeños pasos)/);
+    expect(events.some(event => event.body.includes("Private habit"))).toBe(false);
+  });
   it("suppresses completed, archived, unscheduled and not-yet-created habits", () => {
     const completed = Habit.fromPrimitives(habit.toPrimitives());
     completed.checkIn("2026-11-01", 1, "test", "2026-11-01");
@@ -44,6 +52,8 @@ describe("Reminder planning", () => {
     expect(() => parsePreferences({ ...prefs, quoteTime: "24:00" })).toThrow();
     expect(() => parsePreferences({ ...prefs, habitTimes: { nope: "10:00" } })).toThrow();
     expect(() => parsePreferences({ ...prefs, quotes: "yes" })).toThrow();
+    expect(() => parsePreferences({ ...prefs, language: "fr" })).toThrow();
+    expect(parsePreferences({ ...prefs, language: "es" }).language).toBe("es");
   });
 });
 

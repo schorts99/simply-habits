@@ -48,7 +48,7 @@ test("create, check in, undo, edit, archive/restore, export and offline persiste
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole("heading", { name: "A verified little habit", exact: true })).toBeVisible();
-  await expect(page.getByText(/You're offline. Keep going/)).toBeVisible();
+  await expect(page.getByText(/offline.*Keep going/i)).toBeVisible();
   await page.getByRole("button", { name: "Check in A verified little habit", exact: true }).click();
   await expect(page.locator(".daily-progress > p")).toContainText("1 of 1 habits complete");
   await page.getByRole("button", { name: "New habit", exact: true }).click();
@@ -71,6 +71,7 @@ test("SEO, PWA assets, opt-in notification states, no automatic permission reque
     Notification.requestPermission = () => { requests++; return original(); };
     Object.defineProperty(window, "__permissionRequests", { get: () => requests });
   });
+
   await page.goto("/");
   await expect(page).toHaveTitle("Simply Habits — Offline Habit Tracker");
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/social-cover\.png$/);
@@ -89,4 +90,28 @@ test("SEO, PWA assets, opt-in notification states, no automatic permission reque
   await page.getByRole("button", { name: "Install app", exact: true }).click();
   await expect(page.getByRole("heading", { name: "A home for your habits", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("detects Spanish from device language and persists an explicit language choice", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "en-US" });
+  try {
+    await context.addInitScript(() => Object.defineProperty(navigator, "languages", { configurable: true, get: () => ["es-MX", "es"] }));
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+    await expect(page.getByRole("heading", { name: "Pequeños pasos. Buenos días." })).toBeVisible();
+    await page.getByRole("button", { name: "Ajustes", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Un espacio que se siente como tú." })).toBeVisible();
+    await page.getByRole("combobox", { name: "Idioma" }).selectOption("en");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("heading", { name: "A space that feels like you." })).toBeVisible();
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("combobox", { name: "Language" }).selectOption("es");
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+    await expect(page.getByRole("button", { name: "Ajustes", exact: true })).toBeVisible();
+  } finally { await context.close(); }
 });

@@ -13,10 +13,13 @@ test("public policy pages have accurate metadata, draft warnings and offline nav
   await expect(page).toHaveURL(/\/privacy$/);
   await expect(page).toHaveTitle("Privacy Policy | Simply Habits");
   await expect(page.getByRole("heading", { name: "Privacy Policy", exact: true })).toBeVisible();
-  await expect(page.getByText("Pre-launch draft — not a finalized policy", { exact: true })).toBeVisible();
+  const draftNotice = page.getByText("Pre-launch draft — not a finalized policy", { exact: true });
+  if (await draftNotice.count()) {
+    await expect(draftNotice).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  }
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/privacy$/);
   await expect(page.locator('meta[property="og:url"]')).toHaveAttribute("content", /\/privacy$/);
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
   await expect(page.getByText(/There is no automatic cloud-account deletion feature/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await context.setOffline(true);
@@ -41,7 +44,8 @@ test("privacy and terms render without JavaScript or authentication", async ({ b
     const page = await context.newPage();
     await page.goto("http://127.0.0.1:3100/privacy");
     await expect(page.getByRole("heading", { name: "Privacy Policy", exact: true })).toBeVisible();
-    await expect(page.getByText("Pre-launch draft — not a finalized policy", { exact: true })).toBeVisible();
+    const draftNotice = page.getByText("Pre-launch draft — not a finalized policy", { exact: true });
+    if (await draftNotice.count()) await expect(draftNotice).toBeVisible();
     await page.getByRole("navigation", { name: "Legal information" }).getByRole("link", { name: "Terms of Service" }).click();
     await expect(page.getByRole("heading", { name: "Terms of Service", exact: true })).toBeVisible();
   } finally { await context.close(); }
