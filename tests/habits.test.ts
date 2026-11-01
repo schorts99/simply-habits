@@ -10,6 +10,9 @@ import { CheckInHabit } from "@/habits/check-in/check-in.command";
 import { EditHabit } from "@/habits/edit-habit/edit-habit.command";
 import { ListHabits } from "@/habits/list-habits/list-habits.query";
 import { mergeHabits, sameHabit } from "@/sync/domain/merge-habits";
+import { DeleteHabit } from "@/habits/delete-habit/delete-habit.command";
+import { RestoreBackup } from "@/habits/restore-backup/restore-backup.command";
+import { parseBackup } from "@/habits/restore-backup/backup";
 
 const id = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 const details: HabitDetails = { name: "A little water", description: "", category: "Wellbeing", color: "sage", period: "Morning", target: 2, unit: "glasses", days: [0, 1, 2, 3, 4, 5, 6] };
@@ -124,6 +127,73 @@ describe("Cloud merge", () => {
     expect(merged.entries["2026-10-31"].count).toBe(1);
     expect(sameHabit(merged, mergeHabits(b, a))).toBe(true);
     expect(sameHabit(merged, mergeHabits(merged, b))).toBe(true);
+  });
+
+  describe("Backup restoration and permanent deletion", () => {
+    const encode = (habits: unknown[]) => JSON.stringify({ app: "Simply Habits", version: 1, habits });
+    it("validates complete backups, duplicates and limits before writing", () => {
+      const model = Habit.create(id, details, "c").toPrimitives();
+      expect(parseBackup(encode([model]))).toEqual([model]);
+      for (const invalid of ["{", "null", JSON.stringify({ app: "Other", version: 1, habits: [] }), encode([model, model]), encode([{ ...model, target: -1 }]), encode(Array.from({ length: 1001 }, () => model)), encode([{ ...model, deleted: true }])]) expect(() => parseBackup(invalid)).toThrow();
+    });
+    it("merges backup settings and entries without losing newer local edits and emits one committed event", async () => {
+      const repo = new IndexedDBHabitRepository(crypto.randomUUID());
+      const events: string[] = [];
+      const container = createHabitsModule(repo, async event => { events.push(event.getPayload().action); });
+      try {
+        const h = Habit.create(id, details, "c");
+        const backup = h.toPrimitives();
+        h.edit({ ...details, name: "Newer name" }, "c");
+        h.checkIn(localDate(), 1, "c");
+        await repo.save(h);
+        const another = Habit.create(crypto.randomUUID(), details, "c").toPrimitives();
+        await container.commandBus.dispatch(new RestoreBackup("c", { habits: [backup, another] }));
+        expect((await repo.find(id))?.toPrimitives()).toEqual(h.toPrimitives());
+        expect(await repo.all()).toHaveLength(2);
+        expect(await repo.pending()).toHaveLength(2);
+        expect(events).toEqual(["backup-restored"]);
+        await expect(container.commandBus.dispatch(new RestoreBackup("c", { habits: [another, { ...backup, target: 0 }] }))).rejects.toThrow();
+        expect(events).toEqual(["backup-restored"]);
+      } finally { await container.close(); await repo.close(); }
+    });
+    it("rolls back the whole restore transaction and clears habits plus outbox atomically", async () => {
+      const repo = new IndexedDBHabitRepository(crypto.randomUUID());
+      try {
+        const a = Habit.create(id, details, "c").toPrimitives();
+        const b = Habit.create(crypto.randomUUID(), details, "c").toPrimitives();
+        await expect(repo.restore([a, { ...b, target: 0 }])).rejects.toThrow();
+        expect(await repo.all()).toEqual([]);
+        expect(await repo.pending()).toEqual([]);
+        await repo.restore([a, b]); await repo.clear();
+        expect(await repo.all()).toEqual([]);
+        expect(await repo.pending()).toEqual([]);
+      } finally { await repo.close(); }
+    });
+    it("sanitizes deletion, hides it in queries and prevents resurrection from stale cloud writes and backups", async () => {
+      const repo = new IndexedDBHabitRepository(crypto.randomUUID());
+      const events: string[] = [];
+      const container = createHabitsModule(repo, async event => { events.push(event.getPayload().action); });
+      try {
+        const h = Habit.create(id, { ...details, description: "Private description" }, "c");
+        h.checkIn(localDate(), 1, "c");
+        const stale = h.toPrimitives();
+        await repo.save(h);
+        await container.commandBus.dispatch(new DeleteHabit("c", { id }));
+        const tombstone = (await repo.find(id))!.toPrimitives();
+        expect(tombstone).toMatchObject({ deleted: true, archived: true, name: "Deleted habit", description: "", entries: {} });
+        expect(events).toEqual(["deleted"]);
+        expect(await container.queryBus.dispatch(new ListHabits("c", {}))).toEqual([]);
+        expect(mergeHabits(tombstone, stale)).toEqual(mergeHabits(stale, tombstone));
+        await repo.reconcile([{ ...stale, updated_at: "2099-01-01T00:00:00.000Z" }]);
+        await container.commandBus.dispatch(new RestoreBackup("c", { habits: [stale] }));
+        expect((await repo.find(id))?.toPrimitives().deleted).toBe(true);
+        expect(await container.queryBus.dispatch(new ListHabits("c", {}))).toEqual([]);
+        const removed = Habit.fromPrimitives(tombstone);
+        expect(() => removed.edit(details, "c")).toThrow("deleted");
+        expect(() => removed.setArchived(false, "c")).toThrow("deleted");
+        expect(() => removed.checkIn(localDate(), 1, "c")).toThrow("deleted");
+      } finally { await container.close(); await repo.close(); }
+    });
   });
   it("makes archive state durable without dropping history", () => {
     const a = Habit.create(id, details, "c").toPrimitives();

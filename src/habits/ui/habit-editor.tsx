@@ -11,11 +11,12 @@ export const defaultDetails: HabitDetails = {
 };
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function HabitEditor({ habit, onClose, onSave, onArchive }: {
+export function HabitEditor({ habit, onClose, onSave, onArchive, onDelete }: {
   habit: HabitModel | null;
   onClose(): void;
   onSave(details: HabitDetails): Promise<void>;
   onArchive(): Promise<void>;
+  onDelete(): Promise<void>;
 }) {
   const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -23,6 +24,7 @@ export function HabitEditor({ habit, onClose, onSave, onArchive }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
     const element = dialog.current;
     const previousOverflow = document.body.style.overflow;
@@ -40,6 +42,12 @@ export function HabitEditor({ habit, onClose, onSave, onArchive }: {
   async function archive() {
     setBusy(true);
     try { await onArchive(); onClose(); }
+    catch (error) { setError(t(errorMessage(error))); }
+    finally { setBusy(false); }
+  }
+  async function remove() {
+    setBusy(true); setError(null);
+    try { await onDelete(); onClose(); }
     catch (error) { setError(t(errorMessage(error))); }
     finally { setBusy(false); }
   }
@@ -65,6 +73,7 @@ export function HabitEditor({ habit, onClose, onSave, onArchive }: {
       <fieldset className="field"><legend>{t("A splash of color")}</legend><div className="flex gap-3">{COLORS.map(color => <button key={color} type="button" className={`color-option tint-${color}`} aria-label={t(`${color} color`)} aria-pressed={details.color === color} onClick={() => setDetails({ ...details, color })}>{details.color === color && <Check size={18} />}</button>)}</div></fieldset>
       {error && <p role="alert" className="form-error">{error}</p>}
       {habit && <div className="archive-area">{confirmArchive ? <><p>{t("Your history stays safe. You can restore this habit in Settings.")}</p><button type="button" className="text-button danger" disabled={busy} onClick={archive}>{t("Yes, archive this habit")}</button><button type="button" className="text-button ml-4" onClick={() => setConfirmArchive(false)}>{t("Keep it")}</button></> : <button type="button" className="text-button danger" onClick={() => setConfirmArchive(true)}>{t("Archive habit")}</button>}</div>}
+      {habit && <div className="archive-area">{confirmDelete ? <><p>{t("Export first. Deleting removes this habit’s content and history. A minimal deletion marker prevents old devices or backups from bringing it back.")}</p><button type="button" className="text-button danger" disabled={busy} onClick={remove}>{t("Yes, permanently delete")}</button><button type="button" className="text-button ml-4" disabled={busy} onClick={() => setConfirmDelete(false)}>{t("Cancel")}</button></> : <button type="button" className="text-button danger" disabled={busy} onClick={() => setConfirmDelete(true)}>{t("Delete habit permanently")}</button>}</div>}
       </div>
       <div className="editor-actions"><button type="button" className="button secondary" onClick={onClose} disabled={busy}>{t("Cancel")}</button><button type="submit" className="button primary" disabled={busy}>{t(busy ? "Saving..." : habit ? "Save changes" : "Create habit")}</button></div>
     </form>

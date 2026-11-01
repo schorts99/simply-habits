@@ -24,6 +24,9 @@ import { Insights } from "./insights";
 import { useI18n } from "@/shared/i18n";
 import { LanguageSelector } from "@/shared/ui/language-selector";
 import { ThemeSelector } from "@/shared/ui/theme-selector";
+import { usePreferenceStorageError } from "@/shared/ui/preference-storage";
+import { DataSettings } from "./data-settings";
+import { DeleteHabit } from "../delete-habit/delete-habit.command";
 
 type View = "today" | "insights" | "settings";
 const navigation = [{ id: "today", label: "My habits", icon: LayoutGrid }, { id: "insights", label: "My progress", icon: TrendingUp }, { id: "settings", label: "Settings", icon: Settings }] as const;
@@ -35,6 +38,7 @@ const starters: HabitDetails[] = [
 
 export function HabitApp() {
   const { t, locale, language } = useI18n();
+  const preferenceError = usePreferenceStorageError();
   const app = useHabitApp();
   const pwa = usePwa();
   const { habits, loading, online, pending, syncing, error, lastSync } = app.snapshot;
@@ -127,6 +131,7 @@ export function HabitApp() {
     <div className="workspace">
       <header className="topbar"><div className="mobile-brand"><Image src="/brand.svg" alt="" width={31} height={31} /><strong>simply habits.</strong></div><span className="desktop-breadcrumb">{t("Your space")} <ChevronRight size={13} /> <strong>{t(navigation.find(n => n.id === view)?.label ?? "")}</strong></span><div className="topbar-right"><span className={`sync-status ${!online ? "is-offline" : ""}`} title={status}>{!online ? <WifiOff size={15} /> : syncing ? <LoaderCircle size={15} className="spin" /> : app.user ? <Cloud size={15} /> : <ShieldCheck size={15} />}<span>{status}</span></span><button className="avatar" aria-label={t("Open account settings")} onClick={() => setView("settings")}>{firstName?.[0] ?? <Leaf size={18} />}</button></div></header>
       <main id="main-content" className="main-content">
+        {preferenceError && <p role="alert" className="notice error">{t(preferenceError)}</p>}
         {!online && <div className="notice"><WifiOff size={17} /><p>{t("You’re offline. Keep going — your check-ins are saved on this device.{sync}", { sync: app.user ? t(" They’ll sync when you’re back.") : "" })}</p></div>}
         {(error || app.authError || pwa.error) && <div role="alert" className="notice error"><CloudOff size={18} /><p>{t(error || app.authError || pwa.error || "")}</p>{(error || app.authError) && <button aria-label={t("Dismiss error")} onClick={() => { app.runtime?.clearError(); app.clearAuthError(); }}><X size={18} /></button>}</div>}
         {pwa.update && <div className="notice"><Sparkles size={18} /><p>{t("A fresh version is ready. Your saved habits will stay safe.")}</p><button className="text-button" onClick={pwa.applyUpdate} disabled={!!busy}>{t("Refresh app")}</button></div>}
@@ -163,15 +168,29 @@ export function HabitApp() {
           <section className="panel settings-panel"><div className="settings-heading"><span className="settings-symbol tint-sage"><Cloud size={24} /></span><div><h2>{t("A little peace of mind")}</h2><p className="muted">{t("Optional cloud sync. Always local-first.")}</p></div></div>{app.user ? <><p>{t("Connected as")} <strong>{app.user.displayName || app.user.email}</strong>.</p><p className="muted text-sm mt-2">{status}{lastSync && ` · ${t("Last synced {time}", { time: new Date(lastSync).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }) })}`}</p><div className="flex flex-wrap gap-3 mt-5"><button className="button primary" disabled={!online || syncing || loading} onClick={() => app.runtime?.requestSync()}>{syncing ? <LoaderCircle size={16} className="spin" /> : <Cloud size={16} />} {t("Sync now")}</button><button className="button secondary" disabled={app.authBusy || !!busy} onClick={() => { void app.disconnect(); }}>{t("Sign out")}</button></div><p className="settings-hint">{t("Signing out returns to this device’s guest space. This account’s saved habits stay in its separate local vault.")}</p></> : <><p>{t("Sign in with Google to bring your habits across devices. Your current device habits will be added to your account when you connect.")}</p>{cloudConfigured ? <button className="button primary mt-5" disabled={app.authBusy || !online || loading} onClick={() => { void app.connect(); }}>{app.authBusy ? <LoaderCircle size={17} className="spin" /> : <Cloud size={17} />} {t("Connect with Google")}</button> : <div className="configuration-note"><ShieldCheck size={18} /><span>{t("Local mode is ready. To enable cloud sync, add your Firebase configuration as described in the project README.")}</span></div>}</>}
           </section>
           <NotificationSettings key={app.user?.uid ?? "guest"} user={app.user} habits={habits} online={online} pending={pending} />
+          <DataSettings key={app.user?.uid ?? "guest"} signedIn={!!app.user} disabled={loading || !!busy || app.authBusy || syncing} onExport={exportData} onRestore={async models => {
+            if (!app.runtime) throw new Error("Local storage is still starting. Please wait.");
+            await app.runtime.restoreBackup(models);
+          }} onClear={async () => {
+            if (!app.runtime) throw new Error("Local storage is still starting. Please wait.");
+            await app.runtime.clearLocalData();
+          }} onDeleteAccount={async () => {
+            await app.deleteAccount();
+            setToast(t("Account deleted. Other devices may still hold local copies; clear their site data."));
+          }} />
           <section className="panel settings-panel"><h2>{t("Your trust matters")}</h2><p className="muted mt-3 mb-4">{t("Read how your data is handled and the terms for using Simply Habits.")}</p><LegalLinks /></section>
           <section className="panel settings-panel"><div className="settings-heading"><span className="settings-symbol tint-peach"><ArrowDownToLine size={24} /></span><div><h2>{t("Always within reach")}</h2><p className="muted">{t("Your companion, right on your home screen.")}</p></div></div><p>{t(pwa.installed ? "Simply Habits is installed. Your little rituals have a home." : "Install Simply Habits for a focused, app-like experience. No app store needed.")}</p><div className="flex flex-wrap items-center gap-4 mt-5">{!pwa.installed && <button className="button primary" onClick={() => { void pwa.install(); }}><Plus size={17} /> {t("Install app")}</button>}<span className="offline-ready">{pwa.offlineReady ? <CheckCheck size={17} /> : <ShieldCheck size={17} />}{t(pwa.offlineReady ? "Ready for offline use" : process.env.NODE_ENV === "production" ? "Preparing offline access..." : "Offline shell enabled in production")}</span></div>{pwa.instructions && <div className="install-instructions"><button className="icon-button" aria-label={t("Close installation instructions")} onClick={pwa.closeInstructions}><X size={17} /></button><h3>{t("A home for your habits")}</h3><p>{t("On iPhone or iPad, open this app in Safari, tap Share, then Add to Home Screen. On desktop or Android, use your browser’s Install app or Add to home screen menu. Installation requires HTTPS (or localhost).")}</p></div>}</section>
           <section className="panel settings-panel"><div className="settings-heading"><span className="settings-symbol tint-blue"><ShieldCheck size={24} /></span><div><h2>{t("Your story belongs to you")}</h2><p className="muted">{t("A copy of every little win.")}</p></div></div><p>{t("Download all your habits and check-in history as JSON. Your data stays in your browser until you choose to connect cloud sync.")}</p><button className="button secondary mt-5" disabled={loading} onClick={exportData}><ArrowDownToLine size={16} /> {t("Export my habits")}</button><p className="settings-hint">{t("Browser storage can be cleared by your browser or device. Export regularly, or connect cloud sync for a second copy.")}</p></section>
-          <section className="panel settings-panel"><div className="section-heading"><h2>{t("Taking a little pause")}</h2><span className="subtle-label">{habits.filter(h => h.archived).length} {t("archived")}</span></div><p className="muted text-sm mb-4">{t("Archived habits keep their history. Bring them back whenever you’re ready.")}</p>{habits.filter(h => h.archived).map(h => <div className="archived-row" key={h.id}><span className={`mini-symbol tint-${h.color}`}><HabitIcon category={h.category} size={18} /></span><strong>{h.name}</strong><button className="text-button" disabled={!!busy} onClick={() => { void restore(h); }}>{t("Restore")} <ArrowRight size={14} /></button></div>)}{!habits.some(h => h.archived) && <p className="muted py-3 text-sm">{t("No habits on pause. You can archive a habit from its edit menu.")}</p>}</section>
+          <section className="panel settings-panel"><div className="section-heading"><h2>{t("Taking a little pause")}</h2><span className="subtle-label">{habits.filter(h => h.archived).length} {t("archived")}</span></div><p className="muted text-sm mb-4">{t("Archived habits keep their history. Bring them back whenever you’re ready.")}</p>{habits.filter(h => h.archived).map(h => <div className="archived-row" key={h.id}><span className={`mini-symbol tint-${h.color}`}><HabitIcon category={h.category} size={18} /></span><strong>{h.name}</strong><button className="text-button" aria-label={t("Edit {name}", { name: h.name })} disabled={!!busy} onClick={() => setEditor({ habit: h })}>{t("Edit")}</button><button className="text-button" disabled={!!busy} onClick={() => { void restore(h); }}>{t("Restore")} <ArrowRight size={14} /></button></div>)}{!habits.some(h => h.archived) && <p className="muted py-3 text-sm">{t("No habits on pause. You can archive a habit from its edit menu.")}</p>}</section>
         </div>}
       </main>
     </div>
     <nav className="mobile-nav" aria-label={t("Mobile navigation")}>{navigation.map(item => <button key={item.id} onClick={() => setView(item.id)} className={view === item.id ? "active" : ""} aria-current={view === item.id ? "page" : undefined}><item.icon size={20} /><span>{t(item.label)}</span></button>)}</nav>
-    {editor && <HabitEditor habit={editor.habit} onClose={() => setEditor(null)} onSave={save} onArchive={async () => {
+    {editor && <HabitEditor habit={editor.habit} onClose={() => setEditor(null)} onSave={save} onDelete={async () => {
+      if (!app.runtime || !editor.habit) throw new Error("No habit selected.");
+      await app.runtime.execute(new DeleteHabit(crypto.randomUUID(), { id: editor.habit.id }));
+      setToast(t("Habit permanently deleted. Cloud deletion syncs when connected."));
+    }} onArchive={async () => {
       if (!app.runtime || !editor.habit) throw new Error(t("No habit selected."));
       await app.runtime.execute(new EditHabit(crypto.randomUUID(), { id: editor.habit.id, archived: true }));
       setToast(t("Taking a pause. Your history stays safe."));

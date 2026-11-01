@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, reauthenticateWithPopup, type User } from "firebase/auth";
 import { firebaseAuth } from "@/sync/infrastructure/firebase-client";
 import { HabitRuntime, initialSnapshot, errorMessage } from "@/shared/application/habit-runtime";
 import { disableDevice } from "@/notifications/application/device-client";
+import { deleteCloudAccount } from "@/accounts/delete-account/delete-account.client";
 
 const emptySubscribe = () => () => {};
 const emptySnapshot = () => initialSnapshot;
@@ -85,5 +86,24 @@ export function useHabitApp() {
       setAuthError(errorMessage(error));
     } finally { setAuthBusy(false); }
   }
-  return { runtime, snapshot, user, authBusy, authError, connect, disconnect, clearAuthError: () => setAuthError(null) };
+  async function deleteAccount() {
+    if (!user || !runtime) throw new Error("Sign in to use this feature.");
+    const auth = firebaseAuth();
+    setAuthBusy(true); setAuthError(null);
+    try {
+      await reauthenticateWithPopup(user, new GoogleAuthProvider());
+      await runtime.pauseForAccountDeletion();
+      await deleteCloudAccount(await user.getIdToken(true));
+      await runtime.clearAccountVault();
+      runtime.notifyAccountDeleted();
+      if (auth) await signOut(auth);
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration && "pushManager" in registration ? await registration.pushManager.getSubscription() : null;
+        if (subscription && !await subscription.unsubscribe()) throw new Error("Account deleted, but browser push cleanup failed. Clear this site's data.");
+      }
+    } catch (error) { console.error("Account deletion failed:", error); setAuthError(errorMessage(error)); throw error; }
+    finally { setAuthBusy(false); }
+  }
+  return { runtime, snapshot, user, authBusy, authError, connect, disconnect, deleteAccount, clearAuthError: () => setAuthError(null) };
 }

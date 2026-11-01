@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { readPreference, writePreference } from "./ui/preference-storage";
 
 export type Language = "en" | "es";
 const STORAGE_KEY = "simply-habits.language";
@@ -9,6 +10,117 @@ let initialized = false;
 const listeners = new Set<() => void>();
 
 const spanish: Record<string, string> = {
+  "Something went wrong. Please try again.": "Algo salió mal. Inténtalo de nuevo.",
+  "This habit already exists.": "Este hábito ya existe.",
+  "This habit could not be found.": "No se pudo encontrar este hábito.",
+  "No habit changes provided.": "No se indicaron cambios para el hábito.",
+  "Notification request failed. Please try again.": "La solicitud de notificaciones falló. Inténtalo de nuevo.",
+  "Cloud sync failed. Please try again.": "La sincronización falló. Inténtalo de nuevo.",
+  "Cloud sync is temporarily unavailable. Your habits are safe on this device.": "La sincronización no está disponible temporalmente. Tus hábitos están guardados en este dispositivo.",
+  "The selected file could not be read. Choose it again.": "No se pudo leer el archivo seleccionado. Elígelo de nuevo.",
+  "Account deletion could not be confirmed. Retry or contact support; some data may already be removed.": "No se pudo confirmar la eliminación. Reintenta o contacta con soporte; algunos datos podrían haberse borrado.",
+  "Resetting the guest vault also removes its deletion markers; old backups may then restore deleted guest habits.": "Restablecer el espacio de invitado también borra sus marcadores; las copias antiguas podrían recuperar hábitos de invitado eliminados.",
+  "Edit": "Editar",
+  "Set a CRON_SECRET of at least 32 characters.": "Configura CRON_SECRET con al menos 32 caracteres.",
+  "Unauthorized scheduler.": "Programador no autorizado.",
+  "Reminder worker capacity exceeded. Configure a paginated background worker before adding more devices.": "Se superó la capacidad del proceso de recordatorios. Configura paginación antes de añadir dispositivos.",
+  "Reminder worker exceeded its time budget. Scale the scheduled worker.": "El proceso de recordatorios agotó su tiempo. Amplía su capacidad.",
+  "This subscription expired. Disable and enable notifications again.": "La suscripción ha caducado. Desactiva y vuelve a activar las notificaciones.",
+  "Your session has expired. Please sign in again.": "Tu sesión ha caducado. Inicia sesión de nuevo.",
+  "This browser doesn't support Web Push here. On iPhone or iPad, install the app to your home screen first (iOS 16.4+).": "Este navegador no admite Web Push aquí. En iPhone o iPad, instala primero la aplicación en la pantalla de inicio (iOS 16.4 o posterior).",
+  "Web Push has not been configured yet.": "Web Push aún no está configurado.",
+  "Allow notifications in your browser settings to enable reminders.": "Permite las notificaciones en los ajustes del navegador para activar recordatorios.",
+  "Finish installing the offline app shell, then try again.": "Termina de instalar la aplicación sin conexión e inténtalo de nuevo.",
+  "The browser couldn't unsubscribe. Please try again.": "El navegador no pudo cancelar la suscripción. Inténtalo de nuevo.",
+  "LEGAL_CONTACT_EMAIL must be a valid public contact email.": "LEGAL_CONTACT_EMAIL debe ser un correo público de contacto válido.",
+  "LEGAL_EFFECTIVE_DATE must be a valid YYYY-MM-DD date.": "LEGAL_EFFECTIVE_DATE debe ser una fecha válida AAAA-MM-DD.",
+  "NEXT_PUBLIC_SITE_URL must be an HTTP(S) origin, without credentials, a path, query, or fragment.": "NEXT_PUBLIC_SITE_URL debe ser un origen HTTP(S) sin credenciales, ruta, consulta ni fragmento.",
+  "Firebase hasn't been configured for this app yet.": "Firebase aún no está configurado para esta aplicación.",
+  "Browser preference storage is unavailable. Changes work for this session but may not survive a reload.": "El almacenamiento de preferencias no está disponible. Los cambios funcionan durante esta sesión, pero podrían perderse al recargar.",
+  "Backups and data controls": "Copias de seguridad y control de datos",
+  "Export a backup before deleting data. Restoring merges habits and preserves newer edits; it never replaces your whole vault.": "Exporta una copia antes de borrar datos. Restaurar fusiona los hábitos y conserva los cambios más recientes; nunca reemplaza todo tu almacén.",
+  "Download backup": "Descargar copia",
+  "Choose JSON backup": "Elegir copia JSON",
+  "Ready to merge {count} habits into the current vault.": "Todo listo para fusionar {count} hábitos en el almacén actual.",
+  "Restore backup": "Restaurar copia",
+  "Clearing local habits only clears this device’s guest vault. Sign out first to avoid losing unsynced account changes.": "Borrar hábitos locales solo limpia el espacio de invitado de este dispositivo. Cierra sesión antes para no perder cambios de cuenta sin sincronizar.",
+  "Clear local habits": "Borrar hábitos locales",
+  "Account deletion removes cloud habits, push subscriptions and the Firebase account, plus this device’s account vault. It does not delete your Google account, guest habits, exports, or copies on other devices.": "Eliminar la cuenta borra hábitos de nube, suscripciones push, la cuenta Firebase y su almacén local en este dispositivo. No borra tu cuenta Google, hábitos de invitado, exportaciones ni copias en otros dispositivos.",
+  "Delete account and cloud data": "Eliminar cuenta y datos de nube",
+  "This permanently clears local guest habits and their pending changes.": "Esto borra permanentemente los hábitos de invitado y sus cambios pendientes.",
+  "This is permanent. Google will ask you to sign in again. Partial failures are reported; retry or contact support if deletion does not finish.": "Es permanente. Google te pedirá iniciar sesión de nuevo. Se informan los fallos parciales; reintenta o contacta con soporte si no termina.",
+  "Type DELETE to confirm": "Escribe DELETE para confirmar",
+  "Confirm deletion": "Confirmar eliminación",
+  "Backup merged. Newer edits and permanent deletions were preserved.": "Copia fusionada. Se conservaron los cambios más recientes y las eliminaciones permanentes.",
+  "Local guest habits cleared. Cloud data and other local account vaults were not changed.": "Hábitos de invitado borrados. No se modificaron la nube ni otros almacenes locales de cuenta.",
+  "Account deleted. Other devices may still hold local copies; clear their site data.": "Cuenta eliminada. Otros dispositivos pueden conservar copias locales; borra sus datos del sitio.",
+  "Habit permanently deleted. Cloud deletion syncs when connected.": "Hábito eliminado permanentemente. La eliminación se sincroniza al conectarte.",
+  "Export first. Deleting removes this habit’s content and history. A minimal deletion marker prevents old devices or backups from bringing it back.": "Exporta primero. Eliminar borra el contenido y el historial. Un marcador mínimo impide que dispositivos o copias antiguas lo recuperen.",
+  "Yes, permanently delete": "Sí, eliminar permanentemente",
+  "Delete habit permanently": "Eliminar hábito permanentemente",
+  "Backup exceeds the 20 MB limit.": "La copia supera el límite de 20 MB.",
+  "Choose a valid Simply Habits JSON backup.": "Elige una copia JSON válida de Simply Habits.",
+  "Choose a version 1 Simply Habits backup with at most 1,000 habits.": "Elige una copia de Simply Habits versión 1 con un máximo de 1000 hábitos.",
+  "Backup contains deleted or duplicate habits.": "La copia contiene hábitos eliminados o duplicados.",
+  "This habit has been deleted.": "Este hábito ha sido eliminado.",
+  "This account is being deleted.": "Esta cuenta se está eliminando.",
+  "Account deletion failed. Please try again.": "No se pudo eliminar la cuenta. Inténtalo de nuevo.",
+  "Account deletion is temporarily unavailable. Please try again.": "La eliminación de cuenta no está disponible temporalmente. Inténtalo de nuevo.",
+  "Account deleted, but browser push cleanup failed. Clear this site's data.": "Cuenta eliminada, pero no se pudo limpiar la suscripción push del navegador. Borra los datos de este sitio.",
+  "Sign in again before deleting your account.": "Inicia sesión de nuevo antes de eliminar tu cuenta.",
+  "Type DELETE to confirm account deletion.": "Escribe DELETE para confirmar la eliminación de cuenta.",
+  "Sign out before clearing local habits.": "Cierra sesión antes de borrar hábitos locales.",
+  "Sign in to use this feature.": "Inicia sesión para usar esta función.",
+  "Sign-in was cancelled. Please try again when ready.": "Inicio de sesión cancelado. Inténtalo de nuevo cuando quieras.",
+  "Allow popups for this site and try signing in again.": "Permite las ventanas emergentes de este sitio e inicia sesión de nuevo.",
+  "Check your internet connection and try again.": "Comprueba tu conexión a internet e inténtalo de nuevo.",
+  "Google sign-in failed. Please try again or contact support.": "No se pudo iniciar sesión con Google. Reintenta o contacta con soporte.",
+  "Browser storage is full. Export your habits and free up space before trying again.": "El almacenamiento está lleno. Exporta tus hábitos y libera espacio antes de reintentar.",
+  "Browser storage is unavailable. Allow site storage or use another browser; your changes could not be saved.": "El almacenamiento no está disponible. Permite el almacenamiento del sitio o usa otro navegador; no se pudieron guardar los cambios.",
+  "The request timed out or was interrupted. Please try again.": "La solicitud agotó el tiempo o se interrumpió. Inténtalo de nuevo.",
+  "Invalid habit identifier.": "El identificador del hábito no es válido.",
+  "Invalid check-in history.": "El historial de registros no es válido.",
+  "This habit has too many history entries.": "Este hábito tiene demasiados registros.",
+  "A check-in changes progress by one.": "Cada registro cambia el progreso en una unidad.",
+  "Check-ins must be on or after the habit's start date, and not in the future.": "Los registros no pueden ser anteriores al inicio del hábito ni estar en el futuro.",
+  "This account is no longer active.": "Esta cuenta ya no está activa.",
+  "The cloud returned an invalid response.": "La nube devolvió una respuesta no válida.",
+  "Cannot merge different habits.": "No se pueden fusionar hábitos distintos.",
+  "Firebase project is not configured.": "El proyecto Firebase no está configurado.",
+  "Both Firebase service account fields are required.": "Se requieren ambos campos de la cuenta de servicio Firebase.",
+  "Firebase is not configured on this server.": "Firebase no está configurado en este servidor.",
+  "Cloud sync is not configured on this server.": "La sincronización no está configurada en este servidor.",
+  "Sign in to sync your habits.": "Inicia sesión para sincronizar tus hábitos.",
+  "Invalid request origin.": "El origen de la solicitud no es válido.",
+  "Missing request data.": "Faltan datos de la solicitud.",
+  "Request is too large.": "La solicitud es demasiado grande.",
+  "Invalid JSON.": "El JSON no es válido.",
+  "Missing sync data.": "Faltan datos de sincronización.",
+  "Sync request is too large.": "La solicitud de sincronización es demasiado grande.",
+  "Send at most 20 habits per request.": "Envía un máximo de 20 hábitos por solicitud.",
+  "Duplicate habit identifiers.": "Hay identificadores de hábitos duplicados.",
+  "A habit exceeds the cloud storage limit.": "Un hábito supera el límite de almacenamiento en la nube.",
+  "Invalid reminder preferences.": "Los ajustes de recordatorios no son válidos.",
+  "Invalid reminder language.": "El idioma del recordatorio no es válido.",
+  "Choose a valid IANA timezone.": "Elige una zona horaria IANA válida.",
+  "Use at most 100 habit reminders per device.": "Usa un máximo de 100 recordatorios por dispositivo.",
+  "Choose a valid habit and reminder time.": "Elige un hábito y una hora válidos.",
+  "Invalid push subscription.": "La suscripción push no es válida.",
+  "Invalid push endpoint.": "El endpoint push no es válido.",
+  "This browser's push service is not supported.": "El servicio push de este navegador no es compatible.",
+  "Invalid push encryption keys.": "Las claves de cifrado push no son válidas.",
+  "Web Push is not configured.": "Web Push no está configurado.",
+  "Web Push is not configured on this server.": "Web Push no está configurado en este servidor.",
+  "Invalid device identifier.": "El identificador del dispositivo no es válido.",
+  "Enable notifications on this device first.": "Activa primero las notificaciones en este dispositivo.",
+  "Wait one minute before sending another test.": "Espera un minuto antes de enviar otra prueba.",
+  "Missing notification settings.": "Faltan ajustes de notificaciones.",
+  "Invalid preferences.": "Los ajustes no son válidos.",
+  "Sync your active habits before configuring their reminders.": "Sincroniza tus hábitos activos antes de configurar sus recordatorios.",
+  "This device is linked to another account. Disable its notifications before switching accounts.": "Este dispositivo está vinculado a otra cuenta. Desactiva sus notificaciones antes de cambiar de cuenta.",
+  "This device belongs to another account.": "Este dispositivo pertenece a otra cuenta.",
+  "Notification settings is temporarily unavailable. Please try again.": "Los ajustes de notificaciones no están disponibles temporalmente. Inténtalo de nuevo.",
+  "Test notification is temporarily unavailable. Please try again.": "La notificación de prueba no está disponible temporalmente. Inténtalo de nuevo.",
   "Skip to content": "Saltar al contenido",
   "My habits": "Mis hábitos", "My progress": "Mi progreso", "Settings": "Ajustes",
   "Little by little.": "Poco a poco.", "YOUR LITTLE CORNER": "TU PEQUEÑO RINCÓN",
@@ -219,7 +331,7 @@ function getServerSnapshot(): Language { return "en"; }
 function initialize() {
   if (initialized) return;
   initialized = true;
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const saved = readPreference(STORAGE_KEY);
   language = saved === "es" || saved === "en"
     ? saved
     : detectLanguage(navigator.languages);
@@ -235,7 +347,7 @@ export function useI18n() {
   }, [current]);
   function setLanguage(next: Language) {
     language = next;
-    localStorage.setItem(STORAGE_KEY, next);
+    writePreference(STORAGE_KEY, next);
     document.documentElement.lang = next;
     notify();
   }

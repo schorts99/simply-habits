@@ -56,6 +56,27 @@ export class IndexedDBHabitRepository implements HabitRepository {
     return request<HabitModel[]>(db.transaction(OUTBOX).objectStore(OUTBOX).getAll());
   }
 
+  async restore(models: HabitModel[]): Promise<void> {
+    const uow = new IndexedDBUnitOfWork(await this.db, [STORE, OUTBOX]);
+    await uow.begin();
+    try {
+      for (const model of models) {
+        const existing = await this.dao.findByID(model.id, uow);
+        const merged = existing ? mergeHabits(existing.toPrimitives(), model) : model;
+        await Promise.all([this.dao.save(Habit.fromPrimitives(merged), uow), request(uow.getStore(OUTBOX).put(merged))]);
+      }
+      await uow.commit();
+    } catch (error) { if (uow.isActive()) await uow.rollback(); throw error; }
+  }
+  async clear(): Promise<void> {
+    const uow = new IndexedDBUnitOfWork(await this.db, [STORE, OUTBOX]);
+    await uow.begin();
+    try {
+      await Promise.all([request(uow.getStore(STORE).clear()), request(uow.getStore(OUTBOX).clear())]);
+      await uow.commit();
+    } catch (error) { if (uow.isActive()) await uow.rollback(); throw error; }
+  }
+
   async reconcile(remote: HabitModel[]): Promise<void> {
     const uow = new IndexedDBUnitOfWork(await this.db, [STORE, OUTBOX]);
     await uow.begin();

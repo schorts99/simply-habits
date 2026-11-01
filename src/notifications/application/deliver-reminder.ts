@@ -14,7 +14,8 @@ export class DeliverReminder extends AbstractEventSubscriber<ReminderDue> {
     const device = this.db.doc(`pushDevices/${deviceId}`);
     const delivery = device.collection("deliveries").doc(key);
     const claimed = await this.db.runTransaction(async tx => {
-      const [record, receipt] = await Promise.all([tx.get(device), tx.get(delivery)]);
+      const [record, receipt, account] = await Promise.all([tx.get(device), tx.get(delivery), tx.get(this.db.doc(`users/${uid}`))]);
+      if (account.data()?.deleting) return null;
       if (!record.exists || record.data()?.uid !== uid || receipt.data()?.sentAt || (receipt.data()?.leaseUntil ?? 0) > Date.now()) return null;
       tx.set(delivery, { leaseUntil: Date.now() + 60_000, expiresAt: new Date(Date.now() + 7 * 86_400_000) }, { merge: true });
       return parseSubscription(record.data()!.subscription);
@@ -22,9 +23,15 @@ export class DeliverReminder extends AbstractEventSubscriber<ReminderDue> {
     if (!claimed) return;
     try {
       await this.sender(claimed, { title, body, tag: key });
-      await delivery.set({ sentAt: Date.now(), leaseUntil: 0 }, { merge: true });
+      await this.db.runTransaction(async tx => {
+        const [current, account] = await Promise.all([tx.get(device), tx.get(this.db.doc(`users/${uid}`))]);
+        if (current.data()?.uid === uid && !account.data()?.deleting) tx.set(delivery, { sentAt: Date.now(), leaseUntil: 0 }, { merge: true });
+      });
     } catch (error) {
-      await delivery.set({ leaseUntil: 0 }, { merge: true });
+      await this.db.runTransaction(async tx => {
+        const [current, account] = await Promise.all([tx.get(device), tx.get(this.db.doc(`users/${uid}`))]);
+        if (current.data()?.uid === uid && !account.data()?.deleting) tx.set(delivery, { leaseUntil: 0 }, { merge: true });
+      });
       if (expiredPush(error)) {
         await this.db.runTransaction(async tx => {
           const current = await tx.get(device);

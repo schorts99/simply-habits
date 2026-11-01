@@ -7,6 +7,7 @@ import type { HabitModel } from "@/habits/domain/habit.entity";
 import { synchronize } from "@/sync/application/sync-client";
 import { Habit } from "@/habits/domain/habit.entity";
 import { mergeHabits } from "@/sync/domain/merge-habits";
+import { RestoreBackup } from "@/habits/restore-backup/restore-backup.command";
 
 export type AppSnapshot = {
   habits: HabitModel[];
@@ -21,7 +22,21 @@ export const initialSnapshot: AppSnapshot = { habits: [], loading: true, online:
 
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) {
-    if ("originalError" in error && error.originalError instanceof Error) return error.originalError.message;
+    if ("originalError" in error && error.originalError instanceof Error) return errorMessage(error.originalError);
+    if ("code" in error && typeof error.code === "string" && error.code.startsWith("auth/")) {
+      if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request") return "Sign-in was cancelled. Please try again when ready.";
+      if (error.code === "auth/popup-blocked") return "Allow popups for this site and try signing in again.";
+      if (error.code === "auth/network-request-failed") return "Check your internet connection and try again.";
+      if (error.code === "auth/requires-recent-login" || error.code === "auth/user-token-expired" || error.code === "auth/invalid-user-token") return "Your session has expired. Please sign in again.";
+      return "Google sign-in failed. Please try again or contact support.";
+    }
+    if (error.name === "QuotaExceededError") return "Browser storage is full. Export your habits and free up space before trying again.";
+    if (error.name === "SecurityError" || error.name === "InvalidStateError" || error.name === "UnknownError") return "Browser storage is unavailable. Allow site storage or use another browser; your changes could not be saved.";
+    if (error.name === "TimeoutError" || error.name === "AbortError") return "The request timed out or was interrupted. Please try again.";
+    if (error.message === "Failed to fetch" || error.message === "Load failed") return "Check your internet connection and try again.";
+    if (/^Notification request failed \(\d+\)\.$/.test(error.message)) return "Notification request failed. Please try again.";
+    if (/^Cloud sync failed \(\d+\)\.$/.test(error.message)) return "Cloud sync failed. Please try again.";
+    if (error.name === "NotReadableError") return "The selected file could not be read. Choose it again.";
     return error.message;
   }
   return "Something went wrong. Please try again.";
@@ -37,6 +52,8 @@ export class HabitRuntime {
   private retryTimer?: ReturnType<typeof setInterval>;
   private channel?: BroadcastChannel;
   private syncRequested = false;
+  private deletingAccount = false;
+  private syncTask?: Promise<void>;
 
   constructor(readonly user: User | null) {
     this.repository = new IndexedDBHabitRepository(user?.uid ?? "guest");
@@ -64,6 +81,11 @@ export class HabitRuntime {
       if (typeof BroadcastChannel !== "undefined") {
         this.channel = new BroadcastChannel(`simply-habits-${this.user?.uid ?? "guest"}`);
         this.channel.onmessage = event => {
+          if (event.data === "account-deleted") {
+            this.deletingAccount = true;
+            void this.clearAccountVault().catch(this.reportError);
+            return;
+          }
           void this.refresh().catch(this.reportError);
           if (event.data === "changed") this.requestSync();
         };
@@ -95,6 +117,7 @@ export class HabitRuntime {
     try {
       await this.exclusive(async () => {
         if (this.disposed) throw new Error("This account is no longer active.");
+        if (this.deletingAccount) throw new Error("This account is being deleted.");
         await this.module.commandBus.dispatch(command);
       });
     } catch (error) {
@@ -104,9 +127,9 @@ export class HabitRuntime {
     }
   }
   requestSync = () => {
-    if (!this.user || !this.state.online || this.disposed) return;
+    if (!this.user || !this.state.online || this.disposed || this.deletingAccount) return;
     if (this.state.syncing) { this.syncRequested = true; return; }
-    void this.sync();
+    this.syncTask = this.sync();
   };
   private async sync() {
     if (!this.user) return;
@@ -115,7 +138,7 @@ export class HabitRuntime {
     try {
       await synchronize(this.user, await this.repository.pending(), async remote => {
         await this.exclusive(async () => {
-          if (this.disposed) return;
+          if (this.disposed || this.deletingAccount) return;
           await this.repository.reconcile(remote);
           await this.refresh();
         });
@@ -142,6 +165,35 @@ export class HabitRuntime {
       await this.refresh();
       this.requestSync();
     } finally { await guest.close(); }
+  }
+  async restoreBackup(models: HabitModel[]) {
+    await this.execute(new RestoreBackup(crypto.randomUUID(), { habits: models }));
+  }
+  async clearLocalData() {
+    if (this.user) throw new Error("Sign out before clearing local habits.");
+    await this.exclusive(() => this.repository.clear());
+    await this.refresh();
+    this.channel?.postMessage("changed");
+  }
+  async clearAccountVault() {
+    await this.exclusive(async () => {
+      if (!this.disposed) await this.repository.clear();
+      else {
+        if (!this.user) throw new Error("Sign in to use this feature.");
+        const repository = new IndexedDBHabitRepository(this.user.uid);
+        try { await repository.clear(); }
+        finally { await repository.close(); }
+      }
+    });
+    if (!this.disposed) await this.refresh();
+  }
+  async pauseForAccountDeletion() {
+    this.deletingAccount = true;
+    await this.syncTask;
+    await this.queue;
+  }
+  notifyAccountDeleted() {
+    this.channel?.postMessage("account-deleted");
   }
   async close() {
     this.disposed = true;

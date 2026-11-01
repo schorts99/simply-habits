@@ -73,6 +73,12 @@ describe.skipIf(!authHost || !process.env.FIRESTORE_EMULATOR_HOST)("Web Push wit
     expect(accepted).toHaveBeenCalledOnce();
     expect((await testPush(request("/api/notifications/test", "POST", { device: id }))).status).toBe(429);
     expect((await testPush(request("/api/notifications/test", "POST", { device: id }, 1))).status).toBe(404);
+    const { db } = firebaseAdmin();
+    await db.doc(`pushDevices/${id}`).update({ preferences: { ...preferences, language: "es" }, lastTestAt: 0 });
+    expect((await testPush(request("/api/notifications/test", "POST", { device: id }))).status).toBe(200);
+    const message = accepted.mock.calls.at(-1)?.[1];
+    if (typeof message !== "string") throw new Error("Push payload must be JSON text.");
+    expect(JSON.parse(message)).toMatchObject({ title: "Tus pequeños recordatorios están listos", body: "Esta es una prueba de Simply Habits. Pequeños pasos. Buenos días." });
   });
   it("runs the protected scheduler and persists delivery deduplication", async () => {
     expect((await tick(new NextRequest(`${origin}/api/cron/reminders`))).status).toBe(401);

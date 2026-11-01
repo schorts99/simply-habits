@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const habits = await Promise.all(Object.keys(preferences.habitTimes).map(id => db.doc(`users/${uid}/habits/${id}`).get()));
     if (habits.some(h => !h.exists || h.data()?.archived)) throw new HttpError("Sync your active habits before configuring their reminders.", 409);
     await db.runTransaction(async tx => {
+      if ((await tx.get(db.doc(`users/${uid}`))).data()?.deleting) throw new HttpError("This account is being deleted.", 403);
       const old = await tx.get(device);
       if (old.exists && old.data()?.uid !== uid) throw new HttpError("This device is linked to another account. Disable its notifications before switching accounts.", 409);
       tx.set(device, { uid, subscription, preferences, enabledAt: old.data()?.enabledAt ?? Date.now(), updatedAt: Date.now() });

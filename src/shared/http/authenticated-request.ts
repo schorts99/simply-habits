@@ -12,7 +12,7 @@ export async function authenticated(request: NextRequest) {
   const admin = firebaseAdmin();
   try {
     const identity = await admin.auth.verifyIdToken(header.slice(7), true);
-    return { ...admin, uid: identity.uid };
+    return { ...admin, uid: identity.uid, authTime: identity.auth_time };
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (code.startsWith("auth/")) throw new HttpError("Your session has expired. Please sign in again.", 401);

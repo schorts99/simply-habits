@@ -28,7 +28,8 @@ The build generates PNG icons and a hashed offline asset manifest. Visit online 
 - Personal habits with categories, colors, descriptions, daily targets, time-of-day grouping, and selected weekdays.
 - English and Spanish interface, selected initially from the device language and remembered when changed; dates and scheduled push copy follow the selected language.
 - One-tap progress and undo, historical check-ins, search, completion filters, archive/restore.
-- Calendar-local dates, scheduled-day streaks, 12-week activity view, weekly completion rates, and JSON export.
+- Calendar-local dates, scheduled-day streaks, 12-week activity view, weekly completion rates, JSON export and validated merge restoration.
+- Permanent habit deletion, explicit guest-vault reset and reauthenticated account/cloud deletion.
 - Optional Google sign-in and Firestore sync, durable local outbox, automatic retry on reconnect/focus and every 30 seconds.
 - Account-scoped local vaults, accessible native-dialog editing, responsive navigation, English/Spanish localization, Light/Dark/System themes (System by default), reduced-motion support, install guidance, and explicit offline/update/error states.
 
@@ -70,7 +71,17 @@ Do not consider local/emulator success proof that production credentials or devi
 - Check public `/robots.txt`, `/sitemap.xml`, canonical and social cards; use a social debugger against the deployed URL.
 - Configure scheduler error alerts and monitor sync/push errors, Firestore usage, worker limits, and storage/backups.
 
-The interface uses the first supported language (English or Spanish) in the browser's ordered preferences, falling back to English. A manual selection in Settings persists on that device and synchronizes the document language; scheduled push reminders use the app language the next time their settings are saved. System appearance follows device changes across all pages, including the public legal pages. The public Privacy Policy and Terms are still published in English, with an explicit notice when Spanish is selected.
+The interface uses the first supported language (English or Spanish) in the browser's ordered preferences, falling back to English. A manual selection persists on that device; scheduled and test push messages use the language last saved with reminder settings. System appearance follows device changes across all pages. Privacy and Terms have complete English and Spanish text, including offline navigation; without JavaScript the server-rendered English policy remains readable. Blocked preference storage is logged and shown in an accessible warning: language and theme still work in memory for that session.
+
+### Backups and deletion
+
+In Settings, choose a JSON backup, review its habit count, then confirm **Restore backup**. Only Simply Habits version 1 exports are accepted (20 MB, at most 1,000 unique valid habits). Restoration uses the same deterministic settings/per-day merge as synchronization, preserving newer edits and permanent deletions. All habits and pending sync snapshots commit in one IndexedDB transaction; validation or write failure leaves the vault unchanged. The restore command publishes a single post-commit event to refresh and request sync.
+
+The editor provides separate archive and permanent-delete confirmations; archived habits can also be edited from Settings. Archiving preserves history. Permanent deletion sanitizes content/history and retains an identifier/date synchronization marker. Deletion markers win even against newer stale client changes and backups. They are excluded from visible habits and exports, but sent through cloud sync. Clearing the entire guest vault also resets its local deletion markers, so old guest backups can then restore those habits.
+
+**Clear local habits** requires signing out and typing `DELETE`; it only clears this device's guest vault and outbox. It does not touch cloud data or other local account vaults. Export first. **Delete account and cloud data** requires typing `DELETE` and recent Google reauthentication (within five minutes). The server marks the account as deleting, blocks transactional sync/device-registration/delivery writes, recursively clears its app collections and push devices/receipts, then deletes its Firebase identity. Local syncing is paused before the request; only after confirmed completion is this device's account vault cleared and the session signed out. An interrupted response triggers an authenticated outcome check; failures are explicitly reported, not treated as success. A minimal account identifier/deletion-start marker remains to reject stale in-flight writes. Partial cleanup leaves that marker in place and may require retrying or support intervention.
+
+This does **not** delete the Google account, guest habits, exports, browser/provider backups or offline copies on other devices. Clear site data on those devices separately. Already-dispatched push messages may still arrive. Test destructive account behavior only with isolated emulator/test accounts, never an existing personal production account.
 
 The repository includes automated unit and Firestore/Auth-emulator checks. Live credentials, public social crawler access, OS push delivery, and hosting scheduler behavior still require the deployment acceptance checks above.
 
@@ -80,7 +91,7 @@ Public, server-rendered `/privacy` and `/terms` pages are linked from Settings a
 
 Set `LEGAL_OPERATOR_NAME` to the actual operator, `LEGAL_CONTACT_EMAIL` to a monitored public support/privacy inbox, and `LEGAL_EFFECTIVE_DATE` to the finalized policy's effective date in `YYYY-MM-DD` format, then rebuild. These are public page contents even though the configuration is server-side. Empty fields render conspicuous placeholders and a pre-launch draft banner. Draft pages are `noindex` and excluded from the sitemap; completed configuration adds their canonical URLs to the sitemap and removes the draft banner. Setting fields is not evidence of legal review.
 
-These pages are starting drafts, not legal advice or a compliance certification. Before launch, have the operator and an appropriately qualified adviser check applicable law, eligibility/children, operator identity, service-provider/data-location details, lawful bases where required, international transfers, retention/backups/logs, request handling, and any additional hosting/analytics practices. No specific jurisdiction, arbitration requirement, liability cap, guaranteed deletion deadline, or unimplemented self-service deletion feature is invented. Provide a real process to verify and handle access/deletion requests before advertising it to users. Future analytics, payments, medical use, or significant data-handling changes require revisiting the policies and any consent flows.
+These pages are starting drafts, not legal advice or a compliance certification. Before launch, have the operator and an appropriately qualified adviser check applicable law, eligibility/children, operator identity, service-provider/data-location details, lawful bases where required, international transfers, retention/backups/logs, request handling, and any additional hosting/analytics practices. No specific jurisdiction, arbitration requirement, liability cap or guaranteed deletion deadline is invented. Maintain a real process to verify and handle requests and partial deletion failures. Future analytics, payments, medical use, or significant data-handling changes require revisiting the policies and any consent flows.
 
 ## SEO and social sharing
 
@@ -127,6 +138,8 @@ src/
     domain/habit.insights.ts          # Pure calendar and progress calculations
     create-habit/                     # Command + handler slice
     edit-habit/                       # Edit, archive, restore command slice
+    delete-habit/                     # Sanitized irreversible synchronization marker
+    restore-backup/                   # Validated atomic merge command and event
     check-in/                        # Increment/undo command slice
     list-habits/                      # Query + plain read model slice
     infrastructure/                  # IndexedDB and server-only Firestore DAOs
@@ -163,9 +176,9 @@ npm run build
 npm run test:e2e
 ```
 
-Tests cover entity validation, undo, historical targets, scheduled streaks, calendar boundaries, actual CQRS/event wiring, IndexedDB persistence and durable outbox, account separation, stale-sync reconciliation, deterministic conflict merges, SEO, reminder timezone/DST planning, and service worker push handling. The Auth/Firestore emulator suite also verifies subscriptions, ownership, scheduler protection, rate-limited test sends, delivery receipts/retries, and expired-device cleanup. The push transport is injected in tests; a physical-device test is still required to confirm provider delivery.
+Tests cover entity validation, history, calendar insights, CQRS/event wiring, IndexedDB persistence/outbox, atomic restore rollback, permanent deletion and stale-sync/backup resurrection prevention, vault isolation, deterministic merges, SEO, timezone/DST reminders, and service worker handling. Auth/Firestore emulator checks verify account deletion, recent authentication, partial cleanup, blocked writes and in-flight receipt cleanup, as well as subscriptions, ownership, scheduler protection, localized test pushes, delivery retries and expiration. The push transport is injected in tests; physical-device verification is still required.
 
-For repeatable desktop/mobile browser verification, install Chromium once with `npx playwright install chromium`, run `npm run build`, then `npm run test:e2e`. The runner starts an isolated production server on port 3100 and stops it afterwards. Tests create their own isolated browser vaults and check CRUD, archive/restore, export, completion/undo, app-shell reload and habit creation while offline, responsive overflow, SEO assets, and unconfigured notification states. Use a local-mode build for these guest-mode browser tests.
+For repeatable desktop/mobile browser verification, install Chromium once with `npx playwright install chromium`, run `npm run build`, then `npm run test:e2e`. The runner starts an isolated production server on port 3100 and stops it afterwards. Isolated browser vaults cover CRUD, backup preview/merge, permanent deletion, guest reset, blocked preference storage, English/Spanish policies, appearance, offline reload/navigation, responsive dialogs, SEO and notification states. Google login and provider push delivery are not simulated as production acceptance.
 
 Production dependency overrides update gRPC and rimraf's glob dependency to patched releases while preserving Firebase's modular API. Recheck these overrides on dependency updates, alongside the emulator and browser suites.
 

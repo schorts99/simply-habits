@@ -26,6 +26,7 @@ export type HabitModel = HabitDetails & {
   created_on: string;
   updated_at: string;
   archived: boolean;
+  deleted?: boolean;
   entries: Record<string, CheckIn>;
 };
 
@@ -34,7 +35,7 @@ export class HabitId extends UUIDValue {
 }
 export class InvalidHabit extends Error {}
 
-export class HabitChanged extends DomainEvent<{ habitId: string; action: "created" | "edited" | "checked-in" | "archived" | "restored" }> {
+export class HabitChanged extends DomainEvent<{ habitId: string; action: "created" | "edited" | "checked-in" | "archived" | "restored" | "deleted" }> {
   static readonly NAME = "habits.habit_changed";
   getEventName(): string { return HabitChanged.NAME; }
 }
@@ -65,13 +66,19 @@ export function parseHabit(value: unknown): HabitModel {
     period: PERIODS.find(v => v === period)!, target, unit, days,
   };
   validateDetails(details);
+  if ("deleted" in value && typeof value.deleted !== "boolean") throw new InvalidHabit("Invalid habit data.");
   const parsed: Record<string, CheckIn> = {};
   if (Object.keys(entries).length > 36500) throw new InvalidHabit("This habit has too many history entries.");
   for (const [day, entry] of Object.entries(entries)) {
     if (!isCalendarDate(day) || day < created_on || !isRecord(entry) || !Number.isInteger(entry.count) || typeof entry.count !== "number" || entry.count < 0 || !Number.isInteger(entry.target) || typeof entry.target !== "number" || entry.target < 1 || entry.target > 1000 || entry.count > entry.target || !validStamp(entry.updated_at)) throw new InvalidHabit("Invalid check-in history.");
     parsed[day] = { count: entry.count, target: entry.target, updated_at: entry.updated_at };
   }
-  return { id, ...details, created_on, updated_at, archived, entries: parsed };
+  const model = { id, ...details, created_on, updated_at, archived, entries: parsed };
+  return value.deleted === true ? deletedHabit(model) : model;
+}
+
+export function deletedHabit(model: HabitModel): HabitModel {
+  return { ...model, name: "Deleted habit", description: "", category: "Everyday", color: "sage", period: "Anytime", target: 1, unit: "time", days: [0, 1, 2, 3, 4, 5, 6], archived: true, deleted: true, entries: {} };
 }
 
 export class Habit extends Entity<HabitId, HabitModel> {
@@ -87,12 +94,14 @@ export class Habit extends Entity<HabitId, HabitModel> {
   }
 
   edit(details: HabitDetails, correlationId: string): void {
+    if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
     validateDetails(details);
     this.data = { ...this.data, ...structuredClone(details), name: details.name.trim(), unit: details.unit.trim(), updated_at: this.nextStamp() };
     this.changed("edited", correlationId);
   }
 
   checkIn(day: string, delta: number, correlationId: string, today = localDate()): void {
+    if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
     if (!isCalendarDate(day) || day > today || day < this.data.created_on) throw new InvalidHabit("Check-ins must be on or after the habit's start date, and not in the future.");
     if (this.data.archived || !this.data.days.includes(weekday(day))) throw new InvalidHabit("This habit isn't scheduled for that day.");
     if (delta !== 1 && delta !== -1) throw new InvalidHabit("A check-in changes progress by one.");
@@ -105,9 +114,15 @@ export class Habit extends Entity<HabitId, HabitModel> {
   }
 
   setArchived(archived: boolean, correlationId: string): void {
+    if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
     this.data.archived = archived;
     this.data.updated_at = this.nextStamp();
     this.changed(archived ? "archived" : "restored", correlationId);
+  }
+
+  delete(correlationId: string): void {
+    this.data = deletedHabit({ ...this.data, updated_at: this.nextStamp() });
+    this.changed("deleted", correlationId);
   }
 
   private nextStamp(): string {
@@ -115,7 +130,7 @@ export class Habit extends Entity<HabitId, HabitModel> {
     return new Date(Math.max(Date.now(), latest + 1)).toISOString();
   }
 
-  private changed(action: "created" | "edited" | "checked-in" | "archived" | "restored", correlationId: string): void {
+  private changed(action: "created" | "edited" | "checked-in" | "archived" | "restored" | "deleted", correlationId: string): void {
     this.recordDomainEvent(new HabitChanged(correlationId, { habitId: this.id.value, action }));
   }
   toPrimitives(): HabitModel { return structuredClone(this.data); }

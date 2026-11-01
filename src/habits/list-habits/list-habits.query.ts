@@ -9,6 +9,6 @@ export class ListHabits extends AbstractQuery<Record<string, never>> {
 export class ListHabitsHandler extends AbstractQueryHandler<ListHabits, HabitModel[]> {
   constructor(private readonly repository: HabitRepository) { super(); }
   protected async execute(): Promise<HabitModel[]> {
-    return (await this.repository.all()).map(h => h.toPrimitives()).sort((a, b) => a.created_on.localeCompare(b.created_on) || a.name.localeCompare(b.name));
+    return (await this.repository.all()).map(h => h.toPrimitives()).filter(h => !h.deleted).sort((a, b) => a.created_on.localeCompare(b.created_on) || a.name.localeCompare(b.name));
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { readPreference, writePreference } from "./ui/preference-storage";
 
 export type ThemePreference = "light" | "dark" | "system";
 const STORAGE_KEY = "simply-habits.theme";
@@ -42,7 +43,7 @@ function getServerSnapshot(): ThemePreference { return "system"; }
 function initialize() {
   if (initialized) return;
   initialized = true;
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const saved = readPreference(STORAGE_KEY);
   preference = isTheme(saved) ? saved : "system";
   applyTheme(preference);
   notify();
@@ -53,7 +54,7 @@ export function useTheme() {
   useEffect(initialize, []);
   function setTheme(next: ThemePreference) {
     preference = next;
-    localStorage.setItem(STORAGE_KEY, next);
+    writePreference(STORAGE_KEY, next);
     applyTheme(next);
     notify();
   }
