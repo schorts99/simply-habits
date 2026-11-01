@@ -1,0 +1,6 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "deliveries", "fieldPath": "expiresAt", "ttl": true, "indexes": [] }
+  ]
+}

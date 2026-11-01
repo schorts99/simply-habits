@@ -1,0 +1,46 @@
+{
+  "name": "simply-habits",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "npm run icons && next build && node scripts/build-precache.mjs",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "icons": "node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "@schorts/firestore-admin-dao": "^6.0.0",
+    "@schorts/indexed-db-dao": "^3.0.0",
+    "@schorts/shared-kernel": "^11.0.0",
+    "firebase": "^12.0.0",
+    "lucide-react": "^0.546.0",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/web-push": "^3.6.4",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^16.0.0",
+    "fake-indexeddb": "^6.0.0",
+    "sharp": "^0.34.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7",
+    "rimraf": { "glob": "^14.0.3" }
+  }
+}

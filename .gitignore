@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.example
+*.tsbuildinfo
+coverage/
+public/precache.json
+public/sw.js
+*-debug.log
+test-results/
+playwright-report/
