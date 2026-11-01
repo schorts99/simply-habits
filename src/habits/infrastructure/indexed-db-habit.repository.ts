@@ -5,6 +5,7 @@ import { mergeHabits, sameHabit } from "@/sync/domain/merge-habits";
 
 const STORE = "habits";
 const OUTBOX = "outbox";
+const META = "metadata";
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -14,10 +15,11 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
 }
 function openDatabase(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(name, 1);
+    const req = indexedDB.open(name, 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE, { keyPath: "id" });
-      req.result.createObjectStore(OUTBOX, { keyPath: "id" });
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: "id" });
+      if (!req.result.objectStoreNames.contains(OUTBOX)) req.result.createObjectStore(OUTBOX, { keyPath: "id" });
+      req.result.createObjectStore(META);
     };
     req.onsuccess = () => {
       req.result.onversionchange = () => req.result.close();
@@ -39,6 +41,17 @@ export class IndexedDBHabitRepository implements HabitRepository {
   }
   all(): Promise<Habit[]> { return this.dao.getAll(); }
   find(id: string): Promise<Habit | null> { return this.dao.findByID(id); }
+  async deletionPending(): Promise<boolean> {
+    return (await request((await this.db).transaction(META).objectStore(META).get("deletionPending"))) === true;
+  }
+  async setDeletionPending(pending: boolean): Promise<void> {
+    const uow = new IndexedDBUnitOfWork(await this.db, [META]);
+    await uow.begin();
+    try {
+      await request(uow.getStore(META).put(pending, "deletionPending"));
+      await uow.commit();
+    } catch (error) { if (uow.isActive()) await uow.rollback(); throw error; }
+  }
 
   async save(habit: Habit): Promise<void> {
     const uow = new IndexedDBUnitOfWork(await this.db, [STORE, OUTBOX]);

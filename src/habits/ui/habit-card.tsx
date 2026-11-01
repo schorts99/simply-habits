@@ -19,7 +19,7 @@ export function HabitCard({ habit, day, today, busy, onChange, onEdit }: {
     <div className="flex items-start gap-4">
       <div className={`habit-symbol tint-${habit.color}`}><HabitIcon category={habit.category} /></div>
       <div className="min-w-0 flex-1"><p className="card-category">{t(habit.category)} <span>·</span> {t(habit.period)}</p><h3>{habit.name}</h3><p className="habit-description">{habit.description || t("{target} {unit} of something good.", { target, unit: habit.unit })}</p></div>
-      <button className="icon-button edit-button" aria-label={t("Edit {name}", { name: habit.name })} onClick={onEdit}><MoreHorizontal size={20} /></button>
+      <button className="icon-button edit-button" disabled={busy} aria-label={t("Edit {name}", { name: habit.name })} onClick={onEdit}><MoreHorizontal size={20} /></button>
     </div>
     <div className="habit-progress"><span><strong>{count}</strong><span className="muted"> / {target} {habit.unit}</span></span>{done ? <span className="done-label"><Check size={13} /> {t("All done")}</span> : <span className="muted text-xs">{Math.round(count / target * 100)}%</span>}</div>
     <div className="progress-track"><div className={`progress-fill fill-${habit.color}`} style={{ width: `${Math.min(100, count / target * 100)}%` }} /></div>

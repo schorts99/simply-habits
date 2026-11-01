@@ -12,7 +12,8 @@ import { ListHabits } from "@/habits/list-habits/list-habits.query";
 import { mergeHabits, sameHabit } from "@/sync/domain/merge-habits";
 import { DeleteHabit } from "@/habits/delete-habit/delete-habit.command";
 import { RestoreBackup } from "@/habits/restore-backup/restore-backup.command";
-import { parseBackup } from "@/habits/restore-backup/backup";
+import { parseBackup, previewBackup } from "@/habits/restore-backup/backup";
+import { HabitRuntime } from "@/shared/application/habit-runtime";
 
 const id = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 const details: HabitDetails = { name: "A little water", description: "", category: "Wellbeing", color: "sage", period: "Morning", target: 2, unit: "glasses", days: [0, 1, 2, 3, 4, 5, 6] };
@@ -77,6 +78,35 @@ describe("Calendar-correct insights", () => {
 });
 
 describe("CQRS and atomic IndexedDB outbox", () => {
+  it("upgrades schema 1 without losing habits or unsynced work and persists deletion metadata", async () => {
+    const namespace = crypto.randomUUID();
+    const model = Habit.create(id, details, "c").toPrimitives();
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open(`simply-habits-v1-${namespace}`, 1);
+      open.onupgradeneeded = () => {
+        open.result.createObjectStore("habits", { keyPath: "id" });
+        open.result.createObjectStore("outbox", { keyPath: "id" });
+      };
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(["habits", "outbox"], "readwrite");
+      tx.objectStore("habits").put(model); tx.objectStore("outbox").put(model);
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    const repo = new IndexedDBHabitRepository(namespace);
+    try {
+      expect((await repo.find(id))?.toPrimitives()).toEqual(model);
+      expect(await repo.pending()).toEqual([model]);
+      expect(await repo.deletionPending()).toBe(false);
+      await repo.setDeletionPending(true);
+    } finally { await repo.close(); }
+    const reopened = new IndexedDBHabitRepository(namespace);
+    try { expect(await reopened.deletionPending()).toBe(true); expect(await reopened.all()).toHaveLength(1); }
+    finally { await reopened.close(); }
+  });
   it("persists through the buses, publishes side effects, survives reopen and clears acknowledged work", async () => {
     const namespace = crypto.randomUUID();
     const repo = new IndexedDBHabitRepository(namespace);
@@ -131,6 +161,39 @@ describe("Cloud merge", () => {
 
   describe("Backup restoration and permanent deletion", () => {
     const encode = (habits: unknown[]) => JSON.stringify({ app: "Simply Habits", version: 1, habits });
+    it("previews new, changed, unchanged and deletion-blocked habits using the exact sync merge", () => {
+      const unchanged = Habit.create(crypto.randomUUID(), details, "c").toPrimitives();
+      const merged = Habit.create(crypto.randomUUID(), details, "c").toPrimitives();
+      const removed = Habit.create(crypto.randomUUID(), details, "c");
+      const old = removed.toPrimitives();
+      removed.delete("c");
+      const incoming = [unchanged, { ...merged, name: "Updated", updated_at: "2099-01-01T00:00:00.000Z" }, old, Habit.create(crypto.randomUUID(), details, "c").toPrimitives()];
+      const preview = previewBackup(incoming, [unchanged, merged, removed.toPrimitives()]);
+      expect(preview).toMatchObject({ added: 1, merged: 1, unchanged: 1, blocked: 1 });
+      expect(preview.items.map(item => item.outcome)).toEqual(["Keep newer or identical data", "Merge changes", "Blocked by permanent deletion", "New habit"]);
+    });
+    it("persists a deletion pause, blocks commands and resumes only after a confirmed active status", async () => {
+      const window = new EventTarget();
+      vi.stubGlobal("window", window);
+      vi.stubGlobal("navigator", { onLine: false });
+      vi.stubGlobal("BroadcastChannel", undefined);
+      const runtime = new HabitRuntime(null);
+      try {
+        await runtime.start();
+        await runtime.pauseForAccountDeletion();
+        expect(runtime.snapshot().deletionPending).toBe(true);
+        expect(await runtime.repository.deletionPending()).toBe(true);
+        await expect(runtime.execute(new CreateHabit("c", { id, details }))).rejects.toThrow();
+        await runtime.applyDeletionStatus({ deleted: false, pending: true, failed: true });
+        expect(runtime.snapshot().deletionFailed).toBe(true);
+        await runtime.applyDeletionStatus({ deleted: false, pending: false, failed: false });
+        expect(runtime.snapshot().deletionPending).toBe(false);
+        expect(await runtime.repository.deletionPending()).toBe(false);
+        await runtime.execute(new CreateHabit("c", { id, details }));
+        expect(runtime.snapshot().habits).toHaveLength(1);
+        await runtime.clearLocalData();
+      } finally { await runtime.close(); vi.unstubAllGlobals(); }
+    });
     it("validates complete backups, duplicates and limits before writing", () => {
       const model = Habit.create(id, details, "c").toPrimitives();
       expect(parseBackup(encode([model]))).toEqual([model]);

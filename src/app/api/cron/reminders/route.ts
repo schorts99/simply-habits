@@ -8,6 +8,7 @@ import { pushConfigured } from "@/notifications/infrastructure/web-push";
 import { parsePreferences, dueReminders, ReminderDue } from "@/notifications/domain/reminder";
 import { DeliverReminder } from "@/notifications/application/deliver-reminder";
 import { FirestoreHabitDAO } from "@/habits/infrastructure/firestore-habit.dao";
+import { runDeletionJobs } from "@/accounts/delete-account/deletion-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,8 +21,7 @@ export async function GET(request: NextRequest) {
     const token = request.headers.get("authorization") ?? "";
     const expected = `Bearer ${secret}`;
     if (Buffer.byteLength(token) !== Buffer.byteLength(expected) || !timingSafeEqual(Buffer.from(token), Buffer.from(expected))) throw new HttpError("Unauthorized scheduler.", 401);
-    if (!pushConfigured()) throw new HttpError("Web Push is not configured.", 503);
-    const { db } = firebaseAdmin();
+    const { db, auth } = firebaseAdmin();
     const owner = randomUUID();
     const lock = db.doc("system/reminder-worker");
     const acquired = await db.runTransaction(async tx => {
@@ -32,6 +32,11 @@ export async function GET(request: NextRequest) {
     });
     if (!acquired) return NextResponse.json({ skipped: "Another worker is active." });
     release = () => db.runTransaction(async tx => { const current = await tx.get(lock); if (current.data()?.owner === owner) tx.delete(lock); });
+    const deletions = await runDeletionJobs(db, auth, Date.now() + 10_000);
+    if (!pushConfigured()) {
+      if (deletions.failed) throw new HttpError("Some account deletions failed. The next scheduler tick will retry.", 503);
+      return NextResponse.json({ planned: 0, failed: 0, deletions, push: "unconfigured" });
+    }
     const devices = await db.collection("pushDevices").limit(501).get();
     if (devices.size > 500) throw new HttpError("Reminder worker capacity exceeded. Configure a paginated background worker before adding more devices.", 503);
     DomainEventRegistry.register(ReminderDue.NAME, ReminderDue);
@@ -56,8 +61,8 @@ export async function GET(request: NextRequest) {
         } catch (error) { failed++; console.error("Reminder device delivery failed:", device.id, error); }
       }
     } finally { await bus.close(); }
-    if (failed) return NextResponse.json({ error: "Some reminders could not be delivered. Inspect server logs; the next tick will retry within the recovery window.", planned, failed }, { status: 503 });
-    return NextResponse.json({ planned, failed });
+    if (failed || deletions.failed) return NextResponse.json({ error: "Some scheduled tasks failed. Inspect server logs; the next tick will retry.", planned, failed, deletions }, { status: 503 });
+    return NextResponse.json({ planned, failed, deletions });
   } catch (error) { return apiFailure(error, "Reminder worker"); }
   finally { if (release) await release(); }
 }

@@ -7,6 +7,7 @@
     "build": "npm run icons && next build && node scripts/build-precache.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "check:production": "node scripts/check-production.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "lint": "eslint .",

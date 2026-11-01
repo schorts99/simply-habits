@@ -5,7 +5,7 @@ import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, reaut
 import { firebaseAuth } from "@/sync/infrastructure/firebase-client";
 import { HabitRuntime, initialSnapshot, errorMessage } from "@/shared/application/habit-runtime";
 import { disableDevice } from "@/notifications/application/device-client";
-import { deleteCloudAccount } from "@/accounts/delete-account/delete-account.client";
+import { deleteCloudAccount, getDeletionStatus } from "@/accounts/delete-account/delete-account.client";
 
 const emptySubscribe = () => () => {};
 const emptySnapshot = () => initialSnapshot;
@@ -16,6 +16,7 @@ export function useHabitApp() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const importOnLogin = useRef(false);
+  const deletionToken = useRef<string | null>(null);
   const snapshot = useSyncExternalStore(runtime?.subscribe ?? emptySubscribe, runtime?.snapshot ?? emptySnapshot, emptySnapshot);
 
   useEffect(() => {
@@ -62,6 +63,45 @@ export function useHabitApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user || !runtime || !snapshot.deletionPending || authBusy) return;
+    let cancelled = false, checking = false;
+    async function check() {
+      if (checking || cancelled || !navigator.onLine || !user || !runtime) return;
+      checking = true;
+      try {
+        const token = deletionToken.current ?? await user.getIdToken();
+        const status = snapshot.accountDeleted ? { deleted: true, pending: false, failed: false } : await getDeletionStatus(token);
+        if (cancelled) return;
+        if (!status.deleted) await runtime.applyDeletionStatus(status);
+        else {
+          await runtime.clearAccountVault();
+          runtime.notifyAccountDeleted();
+          try {
+            if ("serviceWorker" in navigator) {
+              const registration = await navigator.serviceWorker.getRegistration();
+              const subscription = registration && "pushManager" in registration ? await registration.pushManager.getSubscription() : null;
+              if (subscription && !await subscription.unsubscribe()) throw new Error("Account deleted, but browser push cleanup failed. Clear this site's data.");
+            }
+          } catch (error) {
+            console.error("Deleted account browser push cleanup failed:", error);
+            setAuthError(errorMessage(error));
+          }
+          const auth = firebaseAuth();
+          if (auth) await signOut(auth);
+          deletionToken.current = null;
+        }
+      } catch (error) {
+        console.error("Account deletion recovery failed:", error);
+        if (!cancelled) setAuthError(errorMessage(error));
+      } finally { checking = false; }
+    }
+    void check();
+    const timer = setInterval(() => { void check(); }, 15_000);
+    window.addEventListener("online", check);
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener("online", check); };
+  }, [user, runtime, snapshot.deletionPending, snapshot.accountDeleted, authBusy]);
+
   async function connect() {
     setAuthBusy(true); setAuthError(null);
     try {
@@ -88,22 +128,26 @@ export function useHabitApp() {
   }
   async function deleteAccount() {
     if (!user || !runtime) throw new Error("Sign in to use this feature.");
-    const auth = firebaseAuth();
     setAuthBusy(true); setAuthError(null);
     try {
       await reauthenticateWithPopup(user, new GoogleAuthProvider());
+      deletionToken.current = await user.getIdToken(true);
       await runtime.pauseForAccountDeletion();
-      await deleteCloudAccount(await user.getIdToken(true));
-      await runtime.clearAccountVault();
-      runtime.notifyAccountDeleted();
-      if (auth) await signOut(auth);
-      if ("serviceWorker" in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        const subscription = registration && "pushManager" in registration ? await registration.pushManager.getSubscription() : null;
-        if (subscription && !await subscription.unsubscribe()) throw new Error("Account deleted, but browser push cleanup failed. Clear this site's data.");
-      }
-    } catch (error) { console.error("Account deletion failed:", error); setAuthError(errorMessage(error)); throw error; }
+      await runtime.applyDeletionStatus(await deleteCloudAccount(deletionToken.current));
+    } catch (error) {
+      console.error("Account deletion failed:", error); setAuthError(errorMessage(error));
+      try { await runtime.applyDeletionStatus(await getDeletionStatus(deletionToken.current ?? await user.getIdToken())); }
+      catch (recoveryError) { console.error("Account deletion recovery check failed:", recoveryError); setAuthError(errorMessage(recoveryError)); }
+      throw error;
+    }
     finally { setAuthBusy(false); }
   }
-  return { runtime, snapshot, user, authBusy, authError, connect, disconnect, deleteAccount, clearAuthError: () => setAuthError(null) };
+  async function checkAccountDeletion() {
+    if (!user || !runtime) return;
+    setAuthBusy(true); setAuthError(null);
+    try { await runtime.applyDeletionStatus(await getDeletionStatus(deletionToken.current ?? await user.getIdToken())); }
+    catch (error) { console.error("Account deletion status check failed:", error); setAuthError(errorMessage(error)); }
+    finally { setAuthBusy(false); }
+  }
+  return { runtime, snapshot, user, authBusy, authError, connect, disconnect, deleteAccount, checkAccountDeletion, clearAuthError: () => setAuthError(null) };
 }

@@ -31,6 +31,7 @@ test("backup preview, merge, permanent deletion and local clear work offline", a
   await expect(page.getByRole("button", { name: "Restore backup", exact: true })).toHaveCount(0);
   await input.setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: backup });
   await expect(page.getByText("Ready to merge 1 habits into the current vault.", { exact: true })).toBeVisible();
+  await expect(page.getByText("0 new · 0 merged · 1 unchanged · 0 deletion-blocked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Restore backup", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Backup merged." })).toBeVisible();
   await page.getByRole("button", { name: "My habits", exact: true }).click();
@@ -42,6 +43,7 @@ test("backup preview, merge, permanent deletion and local clear work offline", a
   await expect(page.locator(".habit-card")).toHaveCount(0);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await input.setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: backup });
+  await expect(page.getByText("0 new · 0 merged · 0 unchanged · 1 deletion-blocked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Restore backup", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Backup merged." })).toBeVisible();
   await page.getByRole("button", { name: "Clear local habits", exact: true }).click();
@@ -53,6 +55,20 @@ test("backup preview, merge, permanent deletion and local clear work offline", a
   await expect(page.locator(".habit-card")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test("Spanish backup preview explains new habits before restoration", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("es");
+  const model = { id: crypto.randomUUID(), name: "Hábito de prueba", description: "", category: "Focus", color: "sage", period: "Anytime", target: 1, unit: "vez", days: [0, 1, 2, 3, 4, 5, 6], created_on: "2026-01-01", updated_at: "2026-01-01T00:00:00.000Z", archived: false, entries: {} };
+  await page.getByLabel("Elegir copia JSON").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ app: "Simply Habits", version: 1, habits: [model] })) });
+  await expect(page.getByText("1 nuevos · 0 fusionados · 0 sin cambios · 0 bloqueados por eliminación", { exact: true })).toBeVisible();
+  await expect(page.getByText("Hábito de prueba: Nuevo hábito", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Restaurar copia", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Copia fusionada." })).toBeVisible();
+  await page.getByRole("button", { name: "Mis hábitos", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Hábito de prueba", exact: true })).toBeVisible();
 });
 
 test("blocked preference storage reports failures without breaking language or theme", async ({ page }) => {

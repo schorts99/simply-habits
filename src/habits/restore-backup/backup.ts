@@ -1,4 +1,21 @@
 import { parseHabit, type HabitModel } from "../domain/habit.entity";
+import { mergeHabits, sameHabit } from "@/sync/domain/merge-habits";
+
+export type BackupPreview = { added: number; merged: number; unchanged: number; blocked: number; items: { name: string; outcome: "New habit" | "Merge changes" | "Keep newer or identical data" | "Blocked by permanent deletion" }[] };
+export function previewBackup(incoming: HabitModel[], local: HabitModel[]): BackupPreview {
+  const existing = new Map(local.map(habit => [habit.id, habit]));
+  const preview: BackupPreview = { added: 0, merged: 0, unchanged: 0, blocked: 0, items: [] };
+  for (const habit of incoming) {
+    const current = existing.get(habit.id);
+    let outcome: BackupPreview["items"][number]["outcome"];
+    if (!current) { preview.added++; outcome = "New habit"; }
+    else if (current.deleted) { preview.blocked++; outcome = "Blocked by permanent deletion"; }
+    else if (sameHabit(current, mergeHabits(current, habit))) { preview.unchanged++; outcome = "Keep newer or identical data"; }
+    else { preview.merged++; outcome = "Merge changes"; }
+    preview.items.push({ name: habit.name, outcome });
+  }
+  return preview;
+}
 
 export const MAX_BACKUP_BYTES = 20_000_000;
 export function parseBackup(text: string): HabitModel[] {

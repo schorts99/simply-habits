@@ -8,6 +8,8 @@ import { synchronize } from "@/sync/application/sync-client";
 import { Habit } from "@/habits/domain/habit.entity";
 import { mergeHabits } from "@/sync/domain/merge-habits";
 import { RestoreBackup } from "@/habits/restore-backup/restore-backup.command";
+import { getDeletionStatus, type DeletionStatus } from "@/accounts/delete-account/delete-account.client";
+import { previewBackup } from "@/habits/restore-backup/backup";
 
 export type AppSnapshot = {
   habits: HabitModel[];
@@ -17,8 +19,11 @@ export type AppSnapshot = {
   syncing: boolean;
   error: string | null;
   lastSync: string | null;
+  deletionPending: boolean;
+  deletionFailed: boolean;
+  accountDeleted: boolean;
 };
-export const initialSnapshot: AppSnapshot = { habits: [], loading: true, online: true, pending: 0, syncing: false, error: null, lastSync: null };
+export const initialSnapshot: AppSnapshot = { habits: [], loading: true, online: true, pending: 0, syncing: false, error: null, lastSync: null, deletionPending: false, deletionFailed: false, accountDeleted: false };
 
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -76,6 +81,10 @@ export class HabitRuntime {
   async start() {
     try {
       this.update({ online: navigator.onLine });
+      if (this.user && await this.repository.deletionPending()) {
+        this.deletingAccount = true;
+        this.update({ deletionPending: true });
+      }
       await this.refresh();
       this.update({ loading: false });
       if (typeof BroadcastChannel !== "undefined") {
@@ -83,7 +92,11 @@ export class HabitRuntime {
         this.channel.onmessage = event => {
           if (event.data === "account-deleted") {
             this.deletingAccount = true;
-            void this.clearAccountVault().catch(this.reportError);
+            this.update({ deletionPending: true, accountDeleted: true });
+            return;
+          }
+          if (event.data === "account-deleting") {
+            void this.pauseForAccountDeletion(false).catch(this.reportError);
             return;
           }
           void this.refresh().catch(this.reportError);
@@ -117,7 +130,7 @@ export class HabitRuntime {
     try {
       await this.exclusive(async () => {
         if (this.disposed) throw new Error("This account is no longer active.");
-        if (this.deletingAccount) throw new Error("This account is being deleted.");
+        if (this.deletingAccount || await this.repository.deletionPending()) throw new Error("This account is being deleted.");
         await this.module.commandBus.dispatch(command);
       });
     } catch (error) {
@@ -136,6 +149,11 @@ export class HabitRuntime {
     this.update({ syncing: true });
     this.syncRequested = false;
     try {
+      const deletion = await getDeletionStatus(await this.user.getIdToken());
+      if (deletion.pending || deletion.deleted) {
+        await this.applyDeletionStatus(deletion);
+        return;
+      }
       await synchronize(this.user, await this.repository.pending(), async remote => {
         await this.exclusive(async () => {
           if (this.disposed || this.deletingAccount) return;
@@ -153,6 +171,7 @@ export class HabitRuntime {
     }
   }
   async importGuestHabits() {
+    if (this.deletingAccount) return;
     const guest = new IndexedDBHabitRepository("guest");
     try {
       const habits = await guest.all();
@@ -168,6 +187,9 @@ export class HabitRuntime {
   }
   async restoreBackup(models: HabitModel[]) {
     await this.execute(new RestoreBackup(crypto.randomUUID(), { habits: models }));
+  }
+  async previewBackup(models: HabitModel[]) {
+    return this.exclusive(async () => previewBackup(models, (await this.repository.all()).map(habit => habit.toPrimitives())));
   }
   async clearLocalData() {
     if (this.user) throw new Error("Sign out before clearing local habits.");
@@ -187,10 +209,19 @@ export class HabitRuntime {
     });
     if (!this.disposed) await this.refresh();
   }
-  async pauseForAccountDeletion() {
+  async pauseForAccountDeletion(broadcast = true) {
     this.deletingAccount = true;
+    this.update({ deletionPending: true });
     await this.syncTask;
-    await this.queue;
+    await this.exclusive(() => this.repository.setDeletionPending(true));
+    if (broadcast) this.channel?.postMessage("account-deleting");
+  }
+  async applyDeletionStatus(status: DeletionStatus) {
+    if (this.disposed) return;
+    this.deletingAccount = status.pending || status.deleted;
+    await this.exclusive(() => this.repository.setDeletionPending(this.deletingAccount));
+    this.update({ deletionPending: this.deletingAccount, deletionFailed: status.failed, accountDeleted: status.deleted });
+    if (!this.deletingAccount) this.requestSync();
   }
   notifyAccountDeleted() {
     this.channel?.postMessage("account-deleted");

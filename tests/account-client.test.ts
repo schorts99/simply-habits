@@ -10,6 +10,14 @@ describe("Account deletion client", () => {
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: "DELETE", body: '{"confirmation":"DELETE"}' });
   });
+  it("accepts queued deletion without claiming cleanup is complete", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"deleted":false,"pending":true,"failed":false}', { status: 202 })));
+    expect(await deleteCloudAccount("test-token")).toEqual({ deleted: false, pending: true, failed: false });
+  });
+  it("recovers a lost enqueue response as pending and retains failed-job status", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("Failed to fetch")).mockResolvedValueOnce(new Response('{"deleted":false,"pending":true,"failed":true}')));
+    expect(await deleteCloudAccount("test-token")).toEqual({ deleted: false, pending: true, failed: true });
+  });
   it("recovers an interrupted response only after confirming deletion on the server", async () => {
     const fetcher = vi.fn().mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError")).mockResolvedValueOnce(new Response('{"deleted":true}'));
     vi.stubGlobal("fetch", fetcher);

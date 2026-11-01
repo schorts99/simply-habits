@@ -18,6 +18,9 @@ export function mergeHabits(a: HabitModel, b: HabitModel): HabitModel {
   return parseHabit(merged);
 }
 export function sameHabit(a: HabitModel, b: HabitModel): boolean {
-  const canonical = (h: HabitModel) => JSON.stringify({ ...h, entries: Object.fromEntries(Object.entries(h.entries).sort(([a], [b]) => a.localeCompare(b))) });
+  const canonical = (h: HabitModel) => {
+    const model = parseHabit(h);
+    return JSON.stringify({ ...model, entries: Object.fromEntries(Object.entries(model.entries).sort(([a], [b]) => a.localeCompare(b))) });
+  };
   return canonical(a) === canonical(b);
 }
