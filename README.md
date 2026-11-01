@@ -30,7 +30,7 @@ The build generates PNG icons and a hashed offline asset manifest. Visit online 
 - One-tap progress and undo, historical check-ins, search, completion filters, archive/restore.
 - Calendar-local dates, scheduled-day streaks, 12-week activity view, weekly completion rates, and JSON export.
 - Optional Google sign-in and Firestore sync, durable local outbox, automatic retry on reconnect/focus and every 30 seconds.
-- Account-scoped local vaults, accessible native-dialog editing, responsive navigation, reduced-motion support, install guidance, and explicit offline/update/error states.
+- Account-scoped local vaults, accessible native-dialog editing, responsive navigation, English/Spanish localization, Light/Dark/System themes (System by default), reduced-motion support, install guidance, and explicit offline/update/error states.
 
 Scope intentionally excludes the base's demo social accounts, squads, leaderboards, and penalties. Time-of-day labels organize habits; actual reminder times are configured separately in Settings.
 

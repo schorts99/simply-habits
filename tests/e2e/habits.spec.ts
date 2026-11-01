@@ -115,3 +115,48 @@ test("detects Spanish from device language and persists an explicit language cho
     await expect(page.getByRole("button", { name: "Ajustes", exact: true })).toBeVisible();
   } finally { await context.close(); }
 });
+
+test("defaults appearance to system and persists Light, Dark and System selections", async ({ browser }) => {
+  const context = await browser.newContext({ colorScheme: "dark", locale: "en-US" });
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect.poll(() => page.locator(".sidebar").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(27, 32, 26)");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const appearance = page.getByRole("combobox", { name: "Appearance" });
+    await expect(appearance).toHaveValue("system");
+
+    await appearance.selectOption("light");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect.poll(() => page.locator(".sidebar").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(252, 252, 249)");
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("combobox", { name: "Appearance" }).selectOption("dark");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect.poll(() => page.locator(".sidebar").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(27, 32, 26)");
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("combobox", { name: "Appearance" }).selectOption("system");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect.poll(() => page.locator(".sidebar").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(252, 252, 249)");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect.poll(() => page.locator(".sidebar").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(27, 32, 26)");
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Appearance" })).toHaveValue("system");
+  } finally { await context.close(); }
+});

@@ -68,6 +68,8 @@ const spanish: Record<string, string> = {
   "Keep your little things safe, close, and ready for wherever life goes.": "Guarda tus pequeñas cosas y tenlas a mano, vayas donde vayas.",
   "Language": "Idioma", "Choose the language for Simply Habits.": "Elige el idioma de Simply Habits.",
   "English": "Inglés", "Spanish": "Español",
+  "Appearance": "Apariencia", "Light": "Claro", "Dark": "Oscuro", "System": "Sistema",
+  "System follows your device’s appearance setting.": "El modo sistema sigue el ajuste de apariencia de tu dispositivo.",
   "of": "de", "habits complete": "hábitos completados",
   "YOUR HABITS, YOUR TRUST": "TUS HÁBITOS, TU CONFIANZA",
   "Back to habits": "Volver a los hábitos",
