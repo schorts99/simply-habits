@@ -53,7 +53,16 @@ describe.skipIf(!authHost || !process.env.FIRESTORE_EMULATOR_HOST)("Authenticate
     expect((await retried.json()).habits[0].entries[localDate()].count).toBe(1);
   });
   it("rejects malformed, duplicated and oversized batch data", async () => {
-    expect((await post({ habits: [{ ...habit.toPrimitives(), target: -1 }] })).status).toBe(400);
+    const invalidHabit = await post({ habits: [{ ...habit.toPrimitives(), target: -1 }] });
+    expect(invalidHabit.status).toBe(400);
+    expect(await invalidHabit.json()).toEqual({ error: "The daily target must be a whole number from 1 to 1,000." });
+    const invalidJson = await POST(new NextRequest(`${origin}/api/sync`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accounts[0].token}`, Origin: origin, "Content-Type": "application/json" },
+      body: "{",
+    }));
+    expect(invalidJson.status).toBe(400);
+    expect(await invalidJson.json()).toEqual({ error: "Invalid JSON." });
     expect((await post({ habits: [habit.toPrimitives(), habit.toPrimitives()] })).status).toBe(400);
     expect((await post({ habits: Array.from({ length: 21 }, () => habit.toPrimitives()) })).status).toBe(400);
   });

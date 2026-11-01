@@ -28,7 +28,8 @@ async function authorize(request: NextRequest) {
 }
 function failure(error: unknown) {
   if (error instanceof HttpError) return NextResponse.json({ error: error.message }, { status: error.status });
-  if (error instanceof InvalidHabit || error instanceof SyntaxError) return NextResponse.json({ error: error instanceof SyntaxError ? "Invalid JSON." : error.message }, { status: 400 });
+  if (error instanceof InvalidHabit) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   console.error("Cloud sync request failed:", error);
   return NextResponse.json({ error: "Cloud sync is temporarily unavailable. Your habits are safe on this device." }, { status: 503 });
 }
