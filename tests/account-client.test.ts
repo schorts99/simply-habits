@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteCloudAccount } from "@/accounts/delete-account/delete-account.client";
+import { deleteCloudAccount, getDeletionStatus } from "@/accounts/delete-account/delete-account.client";
 
 afterEach(() => vi.unstubAllGlobals());
 describe("Account deletion client", () => {
+  it("reports empty or HTML status failures without attempting to parse JSON", async () => {
+    for (const body of [null, "<html>Internal Server Error</html>"]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status: 500 })));
+      await expect(getDeletionStatus("test-token")).rejects.toThrow("Account deletion status could not be checked. Retry or contact support.");
+    }
+  });
   it("requires the exact successful deletion response", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ deleted: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetcher);

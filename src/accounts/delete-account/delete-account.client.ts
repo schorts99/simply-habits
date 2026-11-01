@@ -8,8 +8,8 @@ function parseStatus(value: unknown): DeletionStatus {
 }
 export async function getDeletionStatus(token: string): Promise<DeletionStatus> {
   const response = await fetch("/api/account", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
-  const data: unknown = await response.json();
   if (!response.ok) throw new Error("Account deletion status could not be checked. Retry or contact support.");
+  const data: unknown = await response.json();
   return parseStatus(data);
 }
 export async function deleteCloudAccount(token: string): Promise<DeletionStatus> {

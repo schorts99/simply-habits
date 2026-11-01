@@ -6,6 +6,8 @@ A gentle, installable, offline-first habit tracker built with Next.js 16, React 
 
 Requires Node.js 22 or newer.
 
+On Vercel, set `NODE_OPTIONS=--experimental-require-module` in the environment variables for Production and Preview, then redeploy. If `NODE_OPTIONS` already contains other flags, append this flag rather than replacing them. Vercel disables synchronous ESM loading by default, but the Firebase Admin dependency chain (`jwks-rsa` → `jose`) requires it; without this setting, API functions fail during module loading with `ERR_REQUIRE_ESM`. Local build/emulator success does not verify this runtime setting. See [Vercel's Node.js configuration](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration). After deployment, an unauthenticated `GET /api/account` should return a JSON 401, not an empty 500.
+
 ```sh
 cd simply-habits
 npm install
