@@ -1,5 +1,24 @@
 import { test, expect } from "@playwright/test";
 
+test("select chevrons have the same inset as their labels in both themes", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  for (const theme of ["light", "dark"]) {
+    await page.getByRole("combobox", { name: "Appearance" }).selectOption(theme);
+    for (const select of await page.locator(".field select").all()) {
+      const styles = await select.evaluate(element => {
+        const style = getComputedStyle(element);
+        return { left: style.paddingLeft, inset: style.getPropertyValue("--select-inset").trim(), arrow: style.backgroundImage, appearance: style.appearance, position: style.backgroundPosition, repeat: style.backgroundRepeat };
+      });
+      expect(styles.inset).toBe(styles.left);
+      expect(styles.arrow).toContain("data:image/svg+xml");
+      expect(styles.appearance).toBe("none");
+      expect(styles.position).toBe(`calc(100% - ${styles.left}) 50%`);
+      expect(styles.repeat).toBe("no-repeat");
+    }
+  }
+});
+
 test("create, check in, undo, edit, archive/restore, export and offline persistence", async ({ page, context }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));

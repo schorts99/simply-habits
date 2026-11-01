@@ -693,3 +693,41 @@ html[data-theme="dark"] {
   html[data-theme="system"] .legal-brand { color: #b8d09d; }
   html[data-theme="dark"] .legal-shell,
   html[data-theme="system"] .legal-shell { color: #e6e9df; }
+
+select {
+  --select-inset: 12px;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2358684b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  appearance: none;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: right var(--select-inset) center;
+}
+.field select, .language-selector.compact select, .list-toolbar select {
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: right var(--select-inset) center;
+  padding-right: calc(var(--select-inset) + 24px);
+}
+.language-selector.compact select { --select-inset: 10px; }
+.list-toolbar select { --select-inset: 5px; }
+html[data-theme="dark"] select {
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b5bcae' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+html[data-theme="dark"] .field select,
+html[data-theme="dark"] .language-selector.compact select {
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: right var(--select-inset) center;
+}
+@media (max-width: 480px) {
+  .field select { --select-inset: 10px; }
+}
+@media (forced-colors: active) {
+  select { appearance: auto; }
+  .field select, .language-selector.compact select, .list-toolbar select,
+  html[data-theme="dark"] .field select,
+  html[data-theme="dark"] .language-selector.compact select { background-image: none; }
+}
