@@ -34,6 +34,8 @@ The build generates PNG icons and a hashed offline asset manifest. Visit online 
 
 Scope intentionally excludes the base's demo social accounts, squads, leaderboards, and penalties. Time-of-day labels organize habits; actual reminder times are configured separately in Settings.
 
+Habit dialogs use a full-screen layout on narrow phones, with scrollable fields and pinned close/save controls. Desktop dialogs remain centered, and the underlying page stays locked while editing.
+
 ## Web Push reminders
 
 Notifications are opt-in, account-authenticated, and configured per device in **Settings → A gentle nudge**. Choose one time for each active habit and optionally a daily encouragement. The permission prompt only appears when you press Enable notifications. Reminder bodies do not reveal habit names on a lock screen. Signing out disables this browser's subscription; other signed-in devices remain enabled.

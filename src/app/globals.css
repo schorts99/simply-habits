@@ -242,11 +242,14 @@ a { color: inherit; text-decoration: none; }
 .notice.error { color: #9d644a; background: #fcf0e8; border-color: #efdbc8; }
 .toast { position: fixed; bottom: 26px; left: calc(50% + 100px); transform: translateX(-50%); background: #43553b; color: #f9fbf5; padding: 13px 20px 13px 13px; border-radius: 11px; display: flex; align-items: center; gap: 10px; z-index: 100; font-size: 12px; box-shadow: 0 5px 22px #26342224; max-width: 90vw; width: max-content; animation: toast-in .25s; }
 .toast > span { background: #718763; border-radius: 50%; padding: 4px; }
-.habit-dialog { border: 1px solid #e3e8da; background: #fffefa; border-radius: 18px; padding: 0; width: min(520px, calc(100vw - 28px)); max-height: calc(100dvh - 40px); color: var(--ink); box-shadow: 0 24px 80px #25301f30; }
+.habit-dialog { border: 1px solid #e3e8da; background: #fffefa; border-radius: 18px; padding: 0; margin: auto; width: min(520px, calc(100vw - 28px)); max-height: calc(100dvh - 40px); color: var(--ink); box-shadow: 0 24px 80px #25301f30; overflow: hidden; }
 .habit-dialog::backdrop { background: #27342157; backdrop-filter: blur(3px); }
-.editor-content { padding: 29px; }
+.editor-content { display: flex; flex-direction: column; max-height: calc(100dvh - 40px); padding: 0; }
+.editor-header { padding: 25px 29px 16px; flex-shrink: 0; border-bottom: 1px solid var(--line); }
+.editor-header .icon-button { width: 44px; height: 44px; }
+.editor-fields { padding: 20px 29px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .editor-content h2 { font-size: 25px; margin-bottom: 6px; }
-.editor-content > .muted { font-size: 11px; line-height: 1.7; }
+.editor-fields > .muted { font-size: 11px; line-height: 1.7; }
 .field { display: block; margin-bottom: 17px; color: #68775a; font-size: 11px; font-weight: 600; }
 fieldset.field { border: 0; padding: 0; min-width: 0; }
 .field legend { margin-bottom: 9px; }
@@ -258,7 +261,7 @@ fieldset.field { border: 0; padding: 0; min-width: 0; }
 .day-options button.selected { background: #e6eedb; color: #627b4b; border-color: #cfdcbc; }
 .color-option { border: 2px solid transparent; width: 33px; height: 33px; border-radius: 50%; display: grid; place-items: center; }
 .color-option[aria-pressed="true"] { border-color: currentColor; }
-.editor-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 26px; }
+.editor-actions { display: flex; gap: 10px; justify-content: flex-end; padding: 16px 29px; border-top: 1px solid var(--line); flex-shrink: 0; }
 .editor-actions .button { padding-inline: 22px; }
 .archive-area { border-top: 1px solid var(--line); margin-top: 23px; padding-top: 18px; font-size: 10px; color: #9c8770; }
 .archive-area p { margin-bottom: 10px; line-height: 1.6; }
@@ -465,11 +468,18 @@ fieldset.field { border: 0; padding: 0; min-width: 0; }
   .settings-panel { padding: 22px; }
   .settings-heading h2 { font-size: 16px; }
   .settings-heading { gap: 12px; }
-  .editor-content { padding: 24px 21px; }
+  .habit-dialog { width: 100%; max-width: none; max-height: 100dvh; height: 100dvh; border: 0; border-radius: 0; }
+  .editor-content { height: 100%; max-height: 100dvh; }
+  .editor-header { padding: calc(16px + env(safe-area-inset-top)) 20px 12px; align-items: center; }
+  .editor-fields { flex: 1; padding: 20px; }
+  .editor-field-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .editor-actions { padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); }
+  .editor-actions .button { flex: 1; min-height: 44px; padding-inline: 12px; white-space: normal; }
   .editor-content h2 { font-size: 23px; }
   .field input, .field select { font-size: 16px; padding: 10px; }
   .day-options { gap: 4px; }
-  .day-options button { font-size: 9px; }
+  .day-options button { font-size: 11px; min-height: 44px; }
+  .color-option { width: 44px; height: 44px; }
   .history-notice { flex-wrap: wrap; }
   .notice { padding: 12px; font-size: 10px; }
 }
