@@ -194,6 +194,14 @@ const spanish: Record<string, string> = {
   "Your progress is already at its limit.": "Tu progreso ya ha llegado al límite.",
 };
 
+export function detectLanguage(languages: readonly string[]): Language {
+  for (const language of languages) {
+    const base = language.toLowerCase().split("-")[0];
+    if (base === "en" || base === "es") return base;
+  }
+  return "en";
+}
+
 function notify() { for (const listener of listeners) listener(); }
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -202,7 +210,8 @@ function subscribe(listener: () => void) {
 }
 function onStorage(event: StorageEvent) {
   if (event.key !== STORAGE_KEY) return;
-  language = event.newValue === "es" ? "es" : "en";
+  language = event.newValue === "es" || event.newValue === "en"
+    ? event.newValue : detectLanguage(navigator.languages);
   notify();
 }
 function getSnapshot() { return language; }
@@ -213,7 +222,7 @@ function initialize() {
   const saved = localStorage.getItem(STORAGE_KEY);
   language = saved === "es" || saved === "en"
     ? saved
-    : navigator.languages.some(value => value.toLowerCase().startsWith("es")) ? "es" : "en";
+    : detectLanguage(navigator.languages);
   document.documentElement.lang = language;
   notify();
 }

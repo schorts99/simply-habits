@@ -499,6 +499,9 @@ html[data-theme="dark"] {
   --line: #343b32;
   --sage: #252e24;
 }
+html[data-theme="dark"] .button.primary,
+html[data-theme="dark"] .skip-link { color: #151914; }
+html[data-theme="dark"] .button.primary:hover:not(:disabled) { background: #bdd4ab; }
   html[data-theme="dark"] body,
   html[data-theme="system"] body { background: var(--bg); color: var(--ink); }
   html[data-theme="dark"] .sidebar,

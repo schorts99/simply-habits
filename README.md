@@ -70,7 +70,7 @@ Do not consider local/emulator success proof that production credentials or devi
 - Check public `/robots.txt`, `/sitemap.xml`, canonical and social cards; use a social debugger against the deployed URL.
 - Configure scheduler error alerts and monitor sync/push errors, Firestore usage, worker limits, and storage/backups.
 
-The interface defaults to Spanish when the browser's preferred languages include Spanish, otherwise English. A manual selection in Settings persists on that device and synchronizes the document language; scheduled push reminders use the app language the next time their settings are saved. The public Privacy Policy and Terms are still published in English, with an explicit notice when Spanish is selected.
+The interface uses the first supported language (English or Spanish) in the browser's ordered preferences, falling back to English. A manual selection in Settings persists on that device and synchronizes the document language; scheduled push reminders use the app language the next time their settings are saved. System appearance follows device changes across all pages, including the public legal pages. The public Privacy Policy and Terms are still published in English, with an explicit notice when Spanish is selected.
 
 The repository includes automated unit and Firestore/Auth-emulator checks. Live credentials, public social crawler access, OS push delivery, and hosting scheduler behavior still require the deployment acceptance checks above.
 

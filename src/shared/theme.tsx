@@ -59,3 +59,8 @@ export function useTheme() {
   }
   return { theme: current, setTheme };
 }
+
+export function ThemeObserver() {
+  useTheme();
+  return null;
+}

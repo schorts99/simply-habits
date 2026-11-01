@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { isPublicSite, resolveSiteUrl, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SOCIAL_IMAGE } from "@/shared/seo/site";
 import "./globals.css";
+import { ThemeObserver } from "@/shared/theme";
 
 const siteUrl = resolveSiteUrl();
 
@@ -34,5 +35,5 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const initializeTheme = `try{var t=localStorage.getItem("simply-habits.theme");var d=t==="light"||t==="dark"?t:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=d}catch{document.documentElement.dataset.theme=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}`;
-  return <html lang="en" data-theme="light" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: initializeTheme }} /></head><body>{children}</body></html>;
+  return <html lang="en" data-theme="light" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: initializeTheme }} /></head><body><ThemeObserver />{children}</body></html>;
 }
