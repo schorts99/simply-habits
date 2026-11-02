@@ -10,6 +10,7 @@ let initialized = false;
 const listeners = new Set<() => void>();
 
 const spanish: Record<string, string> = {
+  "Quit habits repeat every day. Record success or a lapse; unrecorded days stay unknown.": "Los hábitos para dejar se repiten todos los días. Registra éxito o recaída; los días sin registrar quedan desconocidos.",
   "Habit type": "Tipo de hábito",
   "Build a habit": "Crear un hábito",
   "Quit a habit": "Dejar un hábito",
