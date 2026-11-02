@@ -35,7 +35,7 @@ export function HabitEditor({ habit, onClose, onSave, onArchive, onDelete }: {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true); setError(null);
-    try { await onSave(details.kind === "quit" ? { ...details, days: [...defaultDetails.days] } : details); onClose(); }
+    try { await onSave(details.kind === "quit" ? { ...details, period: "Anytime", days: [...defaultDetails.days] } : details); onClose(); }
     catch (error) { setError(t(errorMessage(error))); }
     finally { setBusy(false); }
   }
@@ -60,16 +60,16 @@ export function HabitEditor({ habit, onClose, onSave, onArchive, onDelete }: {
       <div className="editor-fields">
       <p className="muted mb-6">{t("Keep it small. Make it yours. Show up again tomorrow.")}</p>
       <label className="field">{t("Habit type")}<select disabled={!!habit} value={details.kind ?? "build"} onChange={event => {
-        if (event.target.value === "quit") setDetails({ ...details, kind: "quit", target: 1, unit: "day", days: [...defaultDetails.days] });
+        if (event.target.value === "quit") setDetails({ ...details, kind: "quit", target: 1, unit: "day", period: "Anytime", days: [...defaultDetails.days] });
         else setDetails({ ...details, kind: "build", target: 1, unit: "time" });
       }}><option value="build">{t("Build a habit")}</option><option value="quit">{t("Quit a habit")}</option></select></label>
       {habit && <p className="muted text-sm mb-4">{t("Create a new habit to change its type.")}</p>}
       {details.kind === "quit" && <p className="muted text-sm mb-4">{t("Quit habits repeat every day. Record success or a lapse; unrecorded days stay unknown.")}</p>}
       <label className="field">{t("Habit name")}<input autoFocus required maxLength={80} placeholder={t("e.g. Take a mindful walk")} value={details.name} onChange={e => setDetails({ ...details, name: e.target.value })} /></label>
       <label className="field">{t("A little why")} <span className="optional">{t("(optional)")}</span><input maxLength={240} placeholder={t("What will this make space for?")} value={details.description} onChange={e => setDetails({ ...details, description: e.target.value })} /></label>
-      <div className="editor-field-row grid grid-cols-2 gap-4">
+      <div className={`editor-field-row grid ${details.kind === "quit" ? "grid-cols-1" : "grid-cols-2"} gap-4`}>
         <label className="field">{t("Category")}<select value={details.category} onChange={e => { const category = CATEGORIES.find(c => c === e.target.value); if (category) setDetails({ ...details, category }); }}>{CATEGORIES.map(c => <option key={c} value={c}>{t(c)}</option>)}</select></label>
-        <label className="field">{t("Time of day")}<select value={details.period} onChange={e => { const period = PERIODS.find(p => p === e.target.value); if (period) setDetails({ ...details, period }); }}>{PERIODS.map(p => <option key={p} value={p}>{t(p)}</option>)}</select></label>
+        {details.kind !== "quit" && <label className="field">{t("Time of day")}<select value={details.period} onChange={e => { const period = PERIODS.find(p => p === e.target.value); if (period) setDetails({ ...details, period }); }}>{PERIODS.map(p => <option key={p} value={p}>{t(p)}</option>)}</select></label>}
       </div>
       {details.kind !== "quit" && <div className="editor-field-row grid grid-cols-[1fr_2fr] gap-4">
         <label className="field">{t("Daily target")}<input type="number" min={1} max={1000} required value={details.target} onChange={e => setDetails({ ...details, target: Number(e.target.value) })} /></label>

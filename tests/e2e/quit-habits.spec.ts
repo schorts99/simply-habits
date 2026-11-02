@@ -4,10 +4,13 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   await page.goto("/");
   await page.getByRole("button", { name: "New habit", exact: true }).click();
   await expect(page.getByRole("group", { name: "Repeat on", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Time of day", exact: true })).toBeVisible();
   await page.getByRole("group", { name: "Repeat on", exact: true }).getByRole("button", { name: "Mon", exact: true }).click();
   await page.getByRole("combobox", { name: "Habit type" }).selectOption("quit");
   await expect(page.getByRole("group", { name: "Repeat on", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Time of day", exact: true })).toHaveCount(0);
   await page.getByRole("combobox", { name: "Habit type" }).selectOption("build");
+  await expect(page.getByRole("combobox", { name: "Time of day", exact: true })).toBeVisible();
   await expect(page.getByRole("group", { name: "Repeat on", exact: true }).getByRole("button", { name: "Mon", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("combobox", { name: "Habit type" }).selectOption("quit");
   await expect(page.getByRole("spinbutton", { name: "Daily target" })).toHaveCount(0);
@@ -27,6 +30,7 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   await expect(card).toContainText("Lapse recorded");
   await page.getByRole("button", { name: "Edit Less scrolling", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Habit type" })).toBeDisabled();
+  await expect(page.getByRole("combobox", { name: "Time of day", exact: true })).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Repeat on", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Close habit editor" }).click();
   await page.getByRole("button", { name: "Undo outcome for Less scrolling", exact: true }).click();
@@ -44,6 +48,7 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const backup = JSON.parse(Buffer.concat(chunks).toString());
   expect(backup.habits[0].kind).toBe("quit");
+  expect(backup.habits[0].period).toBe("Anytime");
   expect(backup.habits[0].days).toEqual([0, 1, 2, 3, 4, 5, 6]);
   expect(Object.values(backup.habits[0].entries)).toEqual([expect.objectContaining({ outcome: "unknown", count: 0 })]);
   // Move the start date back in a valid backup to exercise historical outcome controls.
