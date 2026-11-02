@@ -66,4 +66,19 @@ describe.skipIf(!authHost || !process.env.FIRESTORE_EMULATOR_HOST)("Authenticate
     expect((await post({ habits: [habit.toPrimitives(), habit.toPrimitives()] })).status).toBe(400);
     expect((await post({ habits: Array.from({ length: 21 }, () => habit.toPrimitives()) })).status).toBe(400);
   });
+  it("round-trips quit outcomes and keeps undo when a stale device retries", async () => {
+    const quit = Habit.create(crypto.randomUUID(), { ...details, kind: "quit", target: 1, unit: "day" }, "test");
+    quit.recordOutcome(localDate(), "success", "test");
+    const stale = quit.toPrimitives();
+    expect((await post({ habits: [stale] })).status).toBe(200);
+    quit.recordOutcome(localDate(), "lapse", "test");
+    const lapse = await post({ habits: [quit.toPrimitives()] });
+    expect((await lapse.json()).habits[0].entries[localDate()].outcome).toBe("lapse");
+    quit.recordOutcome(localDate(), "unknown", "test");
+    expect((await post({ habits: [quit.toPrimitives()] })).status).toBe(200);
+    const retry = await post({ habits: [stale] });
+    expect((await retry.json()).habits[0].entries[localDate()].outcome).toBe("unknown");
+    const wrongType = { ...quit.toPrimitives(), kind: "build", entries: {} };
+    expect((await post({ habits: [wrongType] })).status).toBe(400);
+  });
 });

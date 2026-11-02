@@ -59,16 +59,22 @@ export function HabitEditor({ habit, onClose, onSave, onArchive, onDelete }: {
       </div>
       <div className="editor-fields">
       <p className="muted mb-6">{t("Keep it small. Make it yours. Show up again tomorrow.")}</p>
+      <label className="field">{t("Habit type")}<select disabled={!!habit} value={details.kind ?? "build"} onChange={event => {
+        if (event.target.value === "quit") setDetails({ ...details, kind: "quit", target: 1, unit: "day" });
+        else setDetails({ ...details, kind: "build", target: 1, unit: "time" });
+      }}><option value="build">{t("Build a habit")}</option><option value="quit">{t("Quit a habit")}</option></select></label>
+      {habit && <p className="muted text-sm mb-4">{t("Create a new habit to change its type.")}</p>}
+      {details.kind === "quit" && <p className="muted text-sm mb-4">{t("Record success or a lapse each scheduled day. Unrecorded days stay unknown.")}</p>}
       <label className="field">{t("Habit name")}<input autoFocus required maxLength={80} placeholder={t("e.g. Take a mindful walk")} value={details.name} onChange={e => setDetails({ ...details, name: e.target.value })} /></label>
       <label className="field">{t("A little why")} <span className="optional">{t("(optional)")}</span><input maxLength={240} placeholder={t("What will this make space for?")} value={details.description} onChange={e => setDetails({ ...details, description: e.target.value })} /></label>
       <div className="editor-field-row grid grid-cols-2 gap-4">
         <label className="field">{t("Category")}<select value={details.category} onChange={e => { const category = CATEGORIES.find(c => c === e.target.value); if (category) setDetails({ ...details, category }); }}>{CATEGORIES.map(c => <option key={c} value={c}>{t(c)}</option>)}</select></label>
         <label className="field">{t("Time of day")}<select value={details.period} onChange={e => { const period = PERIODS.find(p => p === e.target.value); if (period) setDetails({ ...details, period }); }}>{PERIODS.map(p => <option key={p} value={p}>{t(p)}</option>)}</select></label>
       </div>
-      <div className="editor-field-row grid grid-cols-[1fr_2fr] gap-4">
+      {details.kind !== "quit" && <div className="editor-field-row grid grid-cols-[1fr_2fr] gap-4">
         <label className="field">{t("Daily target")}<input type="number" min={1} max={1000} required value={details.target} onChange={e => setDetails({ ...details, target: Number(e.target.value) })} /></label>
         <label className="field">{t("Unit")}<input required maxLength={24} placeholder={t("glasses, pages, minutes...")} value={details.unit} onChange={e => setDetails({ ...details, unit: e.target.value })} /></label>
-      </div>
+      </div>}
       <fieldset className="field"><legend>{t("Repeat on")}</legend><div className="day-options">{[1, 2, 3, 4, 5, 6, 0].map(day => <button type="button" key={day} aria-pressed={details.days.includes(day)} className={details.days.includes(day) ? "selected" : ""} onClick={() => setDetails({ ...details, days: details.days.includes(day) ? details.days.filter(d => d !== day) : [...details.days, day].sort() })}>{t(weekdays[day])}</button>)}</div></fieldset>
       <fieldset className="field"><legend>{t("A splash of color")}</legend><div className="flex gap-3">{COLORS.map(color => <button key={color} type="button" className={`color-option tint-${color}`} aria-label={t(`${color} color`)} aria-pressed={details.color === color} onClick={() => setDetails({ ...details, color })}>{details.color === color && <Check size={18} />}</button>)}</div></fieldset>
       {error && <p role="alert" className="form-error">{error}</p>}

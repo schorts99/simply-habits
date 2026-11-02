@@ -1,4 +1,4 @@
-import { deletedHabit, parseHabit, type HabitModel } from "@/habits/domain/habit.entity";
+import { deletedHabit, InvalidHabit, parseHabit, type HabitModel } from "@/habits/domain/habit.entity";
 
 function newest<T extends { updated_at: string }>(a: T, b: T): T {
   const comparison = a.updated_at.localeCompare(b.updated_at);
@@ -8,6 +8,7 @@ function newest<T extends { updated_at: string }>(a: T, b: T): T {
 export function mergeHabits(a: HabitModel, b: HabitModel): HabitModel {
   if (a.id !== b.id) throw new Error("Cannot merge different habits.");
   if (a.deleted || b.deleted) return deletedHabit({ ...(a.deleted ? a : b), created_on: a.created_on < b.created_on ? a.created_on : b.created_on, updated_at: a.updated_at > b.updated_at ? a.updated_at : b.updated_at });
+  if ((a.kind ?? "build") !== (b.kind ?? "build")) throw new InvalidHabit("Cannot merge habits with different types.");
   const merged = structuredClone(newest(a, b));
   merged.created_on = a.created_on < b.created_on ? a.created_on : b.created_on;
   merged.entries = {};

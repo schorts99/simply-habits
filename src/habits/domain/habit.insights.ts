@@ -6,7 +6,11 @@ export function scheduled(habit: HabitModel, day: string): boolean {
 }
 export function complete(habit: HabitModel, day: string): boolean {
   const entry = habit.entries[day];
+  if (habit.kind === "quit") return entry?.outcome === "success";
   return !!entry && entry.count >= entry.target;
+}
+export function recorded(habit: HabitModel, day: string): boolean {
+  return habit.kind === "quit" ? ["success", "lapse"].includes(habit.entries[day]?.outcome ?? "") : complete(habit, day);
 }
 export function progress(habits: HabitModel[], day: string): { completed: number; total: number; percent: number } {
   const due = habits.filter(h => scheduled(h, day));
@@ -17,7 +21,7 @@ export function streak(habit: HabitModel, today = localDate()): number {
   let result = 0;
   for (let day = today; day >= habit.created_on; day = shiftDate(day, -1)) {
     if (!habit.days.includes(weekday(day))) continue;
-    if (day === today && !complete(habit, day)) continue;
+    if (day === today && !complete(habit, day) && !(habit.kind === "quit" && habit.entries[day]?.outcome === "lapse")) continue;
     if (!complete(habit, day)) break;
     result++;
   }
@@ -30,6 +34,6 @@ export function insightSummary(habits: HabitModel[], today = localDate()) {
     return { day, ...progress(active, day) };
   });
   const totals = week.reduce((sum, day) => ({ completed: sum.completed + day.completed, total: sum.total + day.total }), { completed: 0, total: 0 });
-  const checkIns = habits.reduce((sum, h) => sum + Object.values(h.entries).filter(e => e.count >= e.target).length, 0);
+  const checkIns = habits.reduce((sum, h) => sum + Object.keys(h.entries).filter(day => complete(h, day)).length, 0);
   return { week, checkIns, bestStreak: Math.max(0, ...active.map(h => streak(h, today))), weeklyRate: totals.total ? Math.round(totals.completed / totals.total * 100) : 0 };
 }

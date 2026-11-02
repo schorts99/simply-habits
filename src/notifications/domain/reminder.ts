@@ -1,7 +1,7 @@
 import { DomainEvent } from "@schorts/shared-kernel/domain-events";
 import type { HabitModel } from "@/habits/domain/habit.entity";
 import { HabitId } from "@/habits/domain/habit.entity";
-import { complete, scheduled } from "@/habits/domain/habit.insights";
+import { recorded, scheduled } from "@/habits/domain/habit.insights";
 
 export type PushPreferences = {
   timezone: string;
@@ -61,7 +61,7 @@ export function dueReminders(deviceId: string, uid: string, preferences: PushPre
     if (slot.getTime() < enabledAt) continue;
     const clock = zonedClock(slot, preferences.timezone);
     for (const habit of habits) {
-      if (preferences.habitTimes[habit.id] !== clock.time || !scheduled(habit, clock.day) || complete(habit, clock.day)) continue;
+      if (preferences.habitTimes[habit.id] !== clock.time || !scheduled(habit, clock.day) || recorded(habit, clock.day)) continue;
       const key = `${clock.day}-habit-${habit.id}`;
       const spanish = preferences.language === "es";
       events.set(key, { deviceId, uid, key, dueAt: slot.getTime(), title: spanish ? "Un pequeño momento para ti" : "A little moment for you", body: spanish ? "Uno de tus hábitos programados te está esperando. Abre Simply Habits para registrarlo." : "One of your scheduled habits is waiting. Open Simply Habits to check in." });

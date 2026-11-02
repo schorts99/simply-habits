@@ -12,10 +12,10 @@ import { LegalLinks } from "@/shared/legal/legal-links";
 import { CatCompanion } from "@/shared/ui/cat";
 import { cloudConfigured } from "@/sync/infrastructure/firebase-client";
 import { CATEGORIES, type HabitDetails, type HabitModel } from "../domain/habit.entity";
-import { insightSummary, progress, scheduled, complete } from "../domain/habit.insights";
+import { insightSummary, progress, scheduled, complete, recorded } from "../domain/habit.insights";
 import { CreateHabit } from "../create-habit/create-habit.command";
 import { EditHabit } from "../edit-habit/edit-habit.command";
-import { CheckInHabit } from "../check-in/check-in.command";
+import { CheckInHabit, type CheckInChange } from "../check-in/check-in.command";
 import { dateObject, shiftDate } from "@/shared/domain/calendar";
 import { HabitEditor } from "./habit-editor";
 import { HabitCard } from "./habit-card";
@@ -69,7 +69,7 @@ export function HabitApp() {
 
   const active = habits.filter(h => !h.archived);
   const due = active.filter(h => scheduled(h, day));
-  const filtered = due.filter(h => (category === "All habits" || h.category === category) && `${h.name} ${h.description}`.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || (filter === "done" ? complete(h, day) : !complete(h, day))));
+  const filtered = due.filter(h => (category === "All habits" || h.category === category) && `${h.name} ${h.description}`.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || (filter === "done" ? complete(h, day) : !recorded(h, day))));
   const selectedProgress = progress(active, day);
   const summary = insightSummary(habits, today);
   const historical = day !== today;
@@ -77,12 +77,12 @@ export function HabitApp() {
   const firstName = app.user?.displayName?.split(" ")[0];
   const status = deletionPending ? t("Account deletion pending") : !online ? t("Offline · saved locally") : syncing ? t("Syncing your habits...") : app.user ? pending ? t("{count} habits waiting to sync", { count: pending }) : lastSync ? t("Everything is synced") : t("Cloud connected") : t("Saved on this device");
 
-  async function checkIn(habit: HabitModel, delta: number) {
+  async function checkIn(habit: HabitModel, delta: CheckInChange) {
     if (!app.runtime || busy) return;
     setBusy(habit.id);
     try {
-      await app.runtime.execute(new CheckInHabit(crypto.randomUUID(), { id: habit.id, day, delta }));
-      if (delta > 0 && (habit.entries[day]?.count ?? 0) + 1 >= (habit.entries[day]?.target ?? habit.target)) setToast(t("A small win, just for you. Nicely done!"));
+      await app.runtime.execute(new CheckInHabit(crypto.randomUUID(), typeof delta === "number" ? { id: habit.id, day, delta } : { id: habit.id, day, outcome: delta }));
+      if (delta === "success" || (typeof delta === "number" && delta > 0 && (habit.entries[day]?.count ?? 0) + 1 >= (habit.entries[day]?.target ?? habit.target))) setToast(t("A small win, just for you. Nicely done!"));
     } catch { /* The runtime reports command errors to the accessible error banner. */ }
     finally { setBusy(null); }
   }
@@ -126,7 +126,7 @@ export function HabitApp() {
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{t("Skip to content")}</a>
     <aside className="sidebar">
-      <Link href="/" className="brand"><Image src="/brand.svg" alt="" width={42} height={42} priority /><span>simply<span className="brand-second">habits<span className="brand-dot">.</span></span></span></Link>
+      <Link href="/" className="brand"><Image draggable="false" src="/brand.svg" alt="" width={42} height={42} priority /><span>simply<span className="brand-second">habits<span className="brand-dot">.</span></span></span></Link>
       <p className="sidebar-tagline">{t("Little by little.")}</p>
       <div className="nav-label">{t("YOUR LITTLE CORNER")}</div>
       <nav aria-label={t("Main navigation")}>{navigation.map(item => <button key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><item.icon size={19} strokeWidth={1.7} /><span>{t(item.label)}</span>{view === item.id && <span className="nav-dot" />}</button>)}</nav>

@@ -9,8 +9,10 @@ export const PERIODS = ["Morning", "Afternoon", "Evening", "Anytime"] as const;
 export type HabitCategory = typeof CATEGORIES[number];
 export type HabitColor = typeof COLORS[number];
 export type HabitPeriod = typeof PERIODS[number];
+export type QuitOutcome = "success" | "lapse" | "unknown";
 
 export type HabitDetails = {
+  kind?: "build" | "quit";
   name: string;
   description: string;
   category: HabitCategory;
@@ -20,7 +22,7 @@ export type HabitDetails = {
   unit: string;
   days: number[];
 };
-export type CheckIn = { count: number; target: number; updated_at: string };
+export type CheckIn = { count: number; target: number; updated_at: string; outcome?: QuitOutcome };
 export type HabitModel = HabitDetails & {
   id: string;
   created_on: string;
@@ -45,6 +47,8 @@ function validStamp(value: unknown): value is string {
 }
 
 export function validateDetails(data: HabitDetails): void {
+  if (data.kind !== undefined && data.kind !== "build" && data.kind !== "quit") throw new InvalidHabit("Choose a valid habit type.");
+  if (data.kind === "quit" && (data.target !== 1 || data.unit !== "day")) throw new InvalidHabit("Quit habits use one daily outcome.");
   if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) throw new InvalidHabit("Give your habit a name between 1 and 80 characters.");
   if (typeof data.description !== "string" || data.description.length > 240) throw new InvalidHabit("Keep the description under 240 characters.");
   if (!CATEGORIES.includes(data.category) || !COLORS.includes(data.color) || !PERIODS.includes(data.period)) throw new InvalidHabit("Choose a valid category, color, and time of day.");
@@ -60,8 +64,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseHabit(value: unknown): HabitModel {
   if (!isRecord(value)) throw new InvalidHabit("Invalid habit data.");
   const { id, name, description, category, color, period, target, unit, days, created_on, updated_at, archived, entries } = value;
+  if (value.kind !== undefined && value.kind !== "build" && value.kind !== "quit") throw new InvalidHabit("Choose a valid habit type.");
   if (typeof id !== "string" || !new HabitId(id).isValid || typeof name !== "string" || typeof description !== "string" || !CATEGORIES.some(v => v === category) || !COLORS.some(v => v === color) || !PERIODS.some(v => v === period) || typeof target !== "number" || typeof unit !== "string" || !Array.isArray(days) || !days.every(d => typeof d === "number") || !isCalendarDate(created_on) || !validStamp(updated_at) || typeof archived !== "boolean" || !isRecord(entries)) throw new InvalidHabit("Invalid habit data.");
   const details: HabitDetails = {
+    ...(value.kind !== undefined ? { kind: value.kind } : {}),
     name, description, category: CATEGORIES.find(v => v === category)!, color: COLORS.find(v => v === color)!,
     period: PERIODS.find(v => v === period)!, target, unit, days,
   };
@@ -71,14 +77,18 @@ export function parseHabit(value: unknown): HabitModel {
   if (Object.keys(entries).length > 36500) throw new InvalidHabit("This habit has too many history entries.");
   for (const [day, entry] of Object.entries(entries)) {
     if (!isCalendarDate(day) || day < created_on || !isRecord(entry) || !Number.isInteger(entry.count) || typeof entry.count !== "number" || entry.count < 0 || !Number.isInteger(entry.target) || typeof entry.target !== "number" || entry.target < 1 || entry.target > 1000 || entry.count > entry.target || !validStamp(entry.updated_at)) throw new InvalidHabit("Invalid check-in history.");
+    if (details.kind === "quit") {
+      if ((entry.outcome !== "success" && entry.outcome !== "lapse" && entry.outcome !== "unknown") || entry.target !== 1 || entry.count !== (entry.outcome === "success" ? 1 : 0)) throw new InvalidHabit("Invalid quit habit outcome.");
+    } else if ("outcome" in entry) throw new InvalidHabit("Invalid check-in history.");
     parsed[day] = { count: entry.count, target: entry.target, updated_at: entry.updated_at };
+    if (details.kind === "quit" && (entry.outcome === "success" || entry.outcome === "lapse" || entry.outcome === "unknown")) parsed[day].outcome = entry.outcome;
   }
   const model = { id, ...details, created_on, updated_at, archived, entries: parsed };
   return value.deleted === true ? deletedHabit(model) : model;
 }
 
 export function deletedHabit(model: HabitModel): HabitModel {
-  return { ...model, name: "Deleted habit", description: "", category: "Everyday", color: "sage", period: "Anytime", target: 1, unit: "time", days: [0, 1, 2, 3, 4, 5, 6], archived: true, deleted: true, entries: {} };
+  return { ...model, ...(model.kind ? { kind: "build" as const } : {}), name: "Deleted habit", description: "", category: "Everyday", color: "sage", period: "Anytime", target: 1, unit: "time", days: [0, 1, 2, 3, 4, 5, 6], archived: true, deleted: true, entries: {} };
 }
 
 export class Habit extends Entity<HabitId, HabitModel> {
@@ -96,11 +106,13 @@ export class Habit extends Entity<HabitId, HabitModel> {
   edit(details: HabitDetails, correlationId: string): void {
     if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
     validateDetails(details);
+    if ((details.kind ?? "build") !== (this.data.kind ?? "build")) throw new InvalidHabit("Create a new habit to change its type.");
     this.data = { ...this.data, ...structuredClone(details), name: details.name.trim(), unit: details.unit.trim(), updated_at: this.nextStamp() };
     this.changed("edited", correlationId);
   }
 
   checkIn(day: string, delta: number, correlationId: string, today = localDate()): void {
+    if (this.data.kind === "quit") throw new InvalidHabit("Choose success or lapse for a quit habit.");
     if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
     if (!isCalendarDate(day) || day > today || day < this.data.created_on) throw new InvalidHabit("Check-ins must be on or after the habit's start date, and not in the future.");
     if (this.data.archived || !this.data.days.includes(weekday(day))) throw new InvalidHabit("This habit isn't scheduled for that day.");
@@ -110,6 +122,17 @@ export class Habit extends Entity<HabitId, HabitModel> {
     const count = (previous?.count ?? 0) + delta;
     if (count < 0 || count > target) throw new InvalidHabit("Your progress is already at its limit.");
     this.data.entries[day] = { count, target, updated_at: this.nextStamp() };
+    this.changed("checked-in", correlationId);
+  }
+
+  recordOutcome(day: string, outcome: QuitOutcome, correlationId: string, today = localDate()): void {
+    if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
+    if (this.data.kind !== "quit") throw new InvalidHabit("Only quit habits accept daily outcomes.");
+    if (outcome !== "success" && outcome !== "lapse" && outcome !== "unknown") throw new InvalidHabit("Invalid quit habit outcome.");
+    if (!isCalendarDate(day) || day > today || day < this.data.created_on) throw new InvalidHabit("Check-ins must be on or after the habit's start date, and not in the future.");
+    if (this.data.archived || !this.data.days.includes(weekday(day))) throw new InvalidHabit("This habit isn't scheduled for that day.");
+    // Keep timestamped undo records so stale sync and backups cannot restore an outcome.
+    this.data.entries[day] = { count: outcome === "success" ? 1 : 0, target: 1, outcome, updated_at: this.nextStamp() };
     this.changed("checked-in", correlationId);
   }
 
