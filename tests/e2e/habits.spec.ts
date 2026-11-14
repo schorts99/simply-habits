@@ -19,12 +19,74 @@ test("select chevrons have the same inset as their labels in both themes", async
   }
 });
 
+test("first-run onboarding focuses on one next step in English and Spanish", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "One small habit is enough." })).toBeVisible();
+  await expect(page.getByText("Your week in bloom", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Search habits" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Create my own/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("es");
+  await page.getByRole("button", { name: "Mis hábitos", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Con un hábito pequeño basta." })).toBeVisible();
+  await expect(page.getByText("Prueba con una idea", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Beber más agua/ }).click();
+  await expect(page.getByRole("heading", { name: "Beber más agua", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Con un hábito pequeño basta." })).toHaveCount(0);
+});
+
+for (const language of ["en", "es"]) {
+  test(`habit cards keep history and actions comfortably spaced in ${language}`, async ({ page }) => {
+    await page.goto("/");
+    if (language === "es") {
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("es");
+      await page.getByRole("button", { name: "Mis hábitos", exact: true }).click();
+    }
+    await page.getByRole("button", { name: /Drink more water|Beber más agua/ }).click();
+    const card = page.locator(".habit-card");
+    await card.locator(".check-button").click();
+    await expect(card.locator(".decrement")).toBeVisible();
+
+    for (const width of [320, 390, 594, 820, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const layout = await card.evaluate(element => {
+        const history = element.querySelector(".habit-week")!.getBoundingClientRect();
+        const controls = element.querySelector(".check-controls")!.getBoundingClientRect();
+        const buttons = Array.from(element.querySelectorAll("button"), button => {
+          const { width, height } = button.getBoundingClientRect();
+          return { width, height };
+        });
+        const undo = element.querySelector(".decrement")!.getBoundingClientRect();
+        const checkIn = element.querySelector(".check-button")!.getBoundingClientRect();
+        const progress = element.querySelector(".progress-track")!.getBoundingClientRect();
+        return {
+          historyGap: Math.max(controls.top - history.bottom, controls.left - history.right),
+          progressGap: Math.min(history.top, controls.top) - progress.bottom,
+          actionGap: checkIn.left - undo.right,
+          buttons,
+          fits: element.scrollWidth <= element.clientWidth && document.documentElement.scrollWidth <= innerWidth,
+        };
+      });
+      expect(layout.historyGap, `history/action gap at ${width}px`).toBeGreaterThanOrEqual(16);
+      expect(layout.progressGap, `progress/footer gap at ${width}px`).toBeGreaterThanOrEqual(24);
+      expect(layout.actionGap, `action gap at ${width}px`).toBeGreaterThanOrEqual(8);
+      for (const button of layout.buttons) {
+        expect(button.width).toBeGreaterThanOrEqual(44);
+        expect(button.height).toBeGreaterThanOrEqual(44);
+      }
+      expect(layout.fits, `no overflow at ${width}px`).toBe(true);
+    }
+  });
+}
+
 test("create, check in, undo, edit, archive/restore, export and offline persistence", async ({ page, context }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Small steps. Good days." })).toBeVisible();
-  await page.getByRole("button", { name: "New habit", exact: true }).click();
+  await page.getByRole("button", { name: "Create my own", exact: true }).click();
   await page.getByRole("textbox", { name: "Habit name", exact: true }).fill("Launch verification habit");
   await page.getByRole("spinbutton", { name: "Daily target" }).fill("2");
   await page.getByRole("textbox", { name: "Unit", exact: true }).fill("glasses");

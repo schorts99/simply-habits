@@ -85,12 +85,40 @@ describe.skipIf(!authHost || !process.env.FIRESTORE_EMULATOR_HOST)("Web Push wit
     const { db } = firebaseAdmin();
     await db.doc(`pushDevices/${id}`).update({ enabledAt: Date.now() - 900_000 });
     const cronRequest = () => new NextRequest(`${origin}/api/cron/reminders`, { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    accepted.mockRejectedValueOnce(new Error("Push service unavailable"));
     const first = await tick(cronRequest());
-    expect(first.status).toBe(200);
-    expect((await first.json()).planned).toBe(1);
+    expect(first.status).toBe(503);
+    expect((await first.json())).toMatchObject({ planned: 1, queued: 1, attempted: 1, failed: 1, queueBacklog: true });
+    const jobs = await db.collection(`pushDevices/${id}/reminderJobs`).get();
+    expect(jobs.size).toBe(1);
+    await jobs.docs[0].ref.update({ nextAttemptAt: 0 });
+
+    const retry = await tick(cronRequest());
+    expect(retry.status).toBe(200);
+    expect((await retry.json())).toMatchObject({ attempted: 1, delivered: 1, failed: 0, queueBacklog: false });
     const count = accepted.mock.calls.length;
     expect((await tick(cronRequest())).status).toBe(200);
     expect(accepted.mock.calls.length).toBe(count);
+  });
+  it("paginates through the registered device collection", async () => {
+    const { db } = firebaseAdmin();
+    const fixtures = Array.from({ length: 101 }, () => db.collection("pushDevices").doc(crypto.randomUUID().replaceAll("-", "")));
+    await Promise.all(fixtures.map((ref, index) => ref.set({
+      uid: `pagination-${index}`,
+      enabledAt: Date.now(),
+      preferences: { timezone: "UTC", habitTimes: {}, quotes: false, quoteTime: "00:00" },
+      subscription: { endpoint: "unused" },
+    })));
+    try {
+      const request = new NextRequest(`${origin}/api/cron/reminders`, { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+      const response = await tick(request);
+      expect(response.status).toBe(200);
+      const result = await response.json();
+      expect(result.scanned).toBeGreaterThanOrEqual(102);
+      expect(result).toMatchObject({ scanComplete: true, queueBacklog: false });
+    } finally {
+      await Promise.all(fixtures.map(ref => db.recursiveDelete(ref)));
+    }
   });
   it("validates synced active habits and skips completed goals in scheduling", async () => {
     const { db } = firebaseAdmin();

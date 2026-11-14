@@ -1,6 +1,8 @@
 {
   "indexes": [],
   "fieldOverrides": [
-    { "collectionGroup": "deliveries", "fieldPath": "expiresAt", "ttl": true, "indexes": [] }
+    { "collectionGroup": "reminderJobs", "fieldPath": "nextAttemptAt", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
+    { "collectionGroup": "deliveries", "fieldPath": "expiresAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "reminderJobs", "fieldPath": "expiresAt", "ttl": true, "indexes": [] }
   ]
 }
