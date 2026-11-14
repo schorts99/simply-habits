@@ -2,8 +2,8 @@ import { AbstractCommand, AbstractCommandHandler, CommandValidationError, type C
 import { InvalidHabit, type QuitOutcome } from "../domain/habit.entity";
 import type { HabitRepository } from "../domain/habit.repository";
 
-export type CheckInChange = number | QuitOutcome;
-export class CheckInHabit extends AbstractCommand<{ id: string; day: string; delta: number } | { id: string; day: string; outcome: QuitOutcome }> {
+export type CheckInChange = number | QuitOutcome | { count: number };
+export class CheckInHabit extends AbstractCommand<{ id: string; day: string; delta: number } | { id: string; day: string; outcome: QuitOutcome } | { id: string; day: string; count: number }> {
   static readonly TYPE = "habits.check_in";
   getType(): string { return CheckInHabit.TYPE; }
 }
@@ -16,6 +16,7 @@ export class CheckInHabitHandler extends AbstractCommandHandler<CheckInHabit, vo
     if (!habit) throw new CommandValidationError("This habit could not be found.");
     try {
       if ("outcome" in payload) habit.recordOutcome(day, payload.outcome, context.correlationId);
+      else if ("count" in payload) habit.setCount(day, payload.count, context.correlationId);
       else habit.checkIn(day, payload.delta, context.correlationId);
     }
     catch (error) {

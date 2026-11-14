@@ -6,7 +6,7 @@ test("habit dialogs fit small screens with reachable actions and scrollable fiel
     for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 667, height: 375 }]) {
       await page.setViewportSize(viewport);
       await page.goto("/");
-      await page.getByRole("button", { name: language === "en" ? "New habit" : "Nuevo hábito", exact: true }).click();
+      await page.getByRole("button", { name: language === "en" ? /New habit|Create my own/ : /Nuevo hábito|Crear mi propio hábito/ }).first().click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       const dimensions = await dialog.evaluate(element => {
@@ -22,6 +22,7 @@ test("habit dialogs fit small screens with reachable actions and scrollable fiel
       await expect(save).toBeInViewport();
       await expect(page.getByRole("button", { name: language === "en" ? "Close habit editor" : "Cerrar editor de hábitos" })).toBeInViewport();
       await page.getByRole("textbox", { name: language === "en" ? "Habit name" : "Nombre del hábito", exact: true }).fill("Mobile dialog test");
+      await page.locator(".editor-options > summary").click();
       await page.getByRole("button", { name: language === "en" ? "blue color" : "color azul", exact: true }).click();
       await expect(save).toBeInViewport();
       expect(await page.locator(".editor-fields").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

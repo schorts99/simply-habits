@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("system appearance updates on habits, insights and public legal pages", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "New habit", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create my own", exact: true })).toBeVisible();
   for (const view of ["My habits", "My progress"]) {
     await page.getByRole("button", { name: view, exact: true }).click();
     await page.emulateMedia({ colorScheme: "dark" });
@@ -24,7 +24,7 @@ test("system appearance updates on habits, insights and public legal pages", asy
 test("dark primary buttons meet text contrast requirements normally and on hover", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
-  const button = page.getByRole("button", { name: "New habit", exact: true });
+  const button = page.getByRole("button", { name: "Create my own", exact: true });
   await expect(button).toBeVisible();
   const contrast = () => button.evaluate(element => {
     const style = getComputedStyle(element);

@@ -2,7 +2,8 @@ import { test, expect } from "@playwright/test";
 
 test("quit habits support success, lapse, historical correction, undo and offline persistence", async ({ page, context }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "New habit", exact: true }).click();
+  await page.getByRole("button", { name: "Create my own", exact: true }).click();
+  await page.locator(".editor-options > summary").click();
   await expect(page.getByRole("group", { name: "Repeat on", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Time of day", exact: true })).toBeVisible();
   await page.getByRole("group", { name: "Repeat on", exact: true }).getByRole("button", { name: "Mon", exact: true }).click();
@@ -19,6 +20,7 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   const card = page.locator(".habit-card");
   await expect(card).toContainText("Not recorded");
   await page.getByRole("button", { name: "Record success for Less scrolling", exact: true }).click();
+  await page.locator(".recorded-habits > summary").click();
   await expect(card).toContainText("Success recorded");
   await expect(page.locator(".daily-progress > p")).toContainText("1 of 1 habits complete");
   await expect(card).toContainText("1 scheduled-day streak");
@@ -27,6 +29,7 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   await expect(page.locator(".daily-progress > p")).toContainText("0 of 1 habits complete");
   await expect(card.locator(".streak-line")).toHaveCount(0);
   await page.reload();
+  await page.locator(".recorded-habits > summary").click();
   await expect(card).toContainText("Lapse recorded");
   await page.getByRole("button", { name: "Edit Less scrolling", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Habit type" })).toBeDisabled();
@@ -42,7 +45,7 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   await expect(page.getByText("Ready for offline use", { exact: true })).toBeVisible();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export my habits", exact: true }).click();
+  await page.getByRole("button", { name: "Download backup", exact: true }).click();
   const stream = await (await downloadPromise).createReadStream();
   const chunks: Buffer[] = [];
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
@@ -61,12 +64,15 @@ test("quit habits support success, lapse, historical correction, undo and offlin
   await context.setOffline(true);
   await page.reload();
   await page.getByRole("button", { name: "Record success for Less scrolling", exact: true }).click();
+  await page.locator(".recorded-habits > summary").click();
   await expect(card).toContainText("Success recorded");
   await page.reload();
+  await page.locator(".recorded-habits > summary").click();
   await expect(card).toContainText("Success recorded");
   await page.locator(".date-strip .date-cell").nth(5).click();
   await expect(card).toContainText("Not recorded");
   await page.getByRole("button", { name: "Record lapse for Less scrolling", exact: true }).click();
+  await page.locator(".recorded-habits > summary").click();
   await expect(card).toContainText("Lapse recorded");
   await page.getByRole("button", { name: "Record success for Less scrolling", exact: true }).click();
   await expect(card).toContainText("2 scheduled-day streak");
@@ -80,12 +86,13 @@ test("quit habit controls and outcomes are translated into Spanish", async ({ pa
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("combobox", { name: "Language" }).selectOption("es");
   await page.getByRole("button", { name: "Mis hábitos", exact: true }).click();
-  await page.getByRole("button", { name: "Nuevo hábito", exact: true }).click();
+  await page.getByRole("button", { name: "Crear mi propio hábito", exact: true }).click();
   await page.getByRole("combobox", { name: "Tipo de hábito" }).selectOption("quit");
   await page.getByRole("textbox", { name: "Nombre del hábito", exact: true }).fill("Menos pantallas");
   await page.getByRole("button", { name: "Crear hábito", exact: true }).click();
   await expect(page.locator(".habit-card")).toContainText("Sin registrar");
   await page.getByRole("button", { name: "Registrar recaída para Menos pantallas", exact: true }).click();
+  await page.locator(".recorded-habits > summary").click();
   await expect(page.locator(".habit-card")).toContainText("Recaída registrada");
   await page.getByRole("button", { name: "Registrar éxito para Menos pantallas", exact: true }).click();
   await expect(page.locator(".habit-card")).toContainText("Éxito registrado");

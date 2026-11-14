@@ -51,6 +51,26 @@ describe("Habit entity", () => {
     habit.checkIn(localDate(), 1, "c");
     expect(habit.toPrimitives().entries[localDate()].count).toBe(1);
   });
+  it("sets a daily total atomically, preserves historical targets and rejects invalid quantities", () => {
+    const habit = Habit.create(id, { ...details, target: 8 }, "c", "2026-10-01");
+    habit.pullDomainEvents();
+    habit.setCount("2026-10-02", 5, "c", "2026-10-03");
+    expect(habit.toPrimitives().entries["2026-10-02"]).toMatchObject({ count: 5, target: 8 });
+    expect(habit.pullDomainEvents()).toHaveLength(1);
+    habit.edit({ ...details, target: 2 }, "c");
+    habit.setCount("2026-10-02", 8, "c", "2026-10-03");
+    expect(complete(habit.toPrimitives(), "2026-10-02")).toBe(true);
+    for (const count of [-1, 9, 1.5, NaN, Infinity]) expect(() => habit.setCount("2026-10-02", count, "c", "2026-10-03")).toThrow(InvalidHabit);
+    expect(() => habit.setCount("2026-10-04", 1, "c", "2026-10-03")).toThrow("future");
+    expect(() => habit.setCount("2026-09-30", 1, "c", "2026-10-03")).toThrow("start date");
+    const completed = habit.toPrimitives();
+    habit.setCount("2026-10-02", 0, "c", "2026-10-03");
+    expect(mergeHabits(completed, habit.toPrimitives()).entries["2026-10-02"].count).toBe(0);
+    habit.setArchived(true, "c");
+    expect(() => habit.setCount("2026-10-02", 1, "c", "2026-10-03")).toThrow("scheduled");
+    const quit = Habit.create(crypto.randomUUID(), { ...details, kind: "quit", target: 1, unit: "day" }, "c", "2026-10-01");
+    expect(() => quit.setCount("2026-10-02", 1, "c", "2026-10-03")).toThrow("success or lapse");
+  });
   it("round-trips without events and rejects malformed cloud primitives", () => {
     const model = Habit.create(id, details, "c").toPrimitives();
     const restored = Habit.fromPrimitives(model);
@@ -78,6 +98,17 @@ describe("Calendar-correct insights", () => {
 });
 
 describe("CQRS and atomic IndexedDB outbox", () => {
+  it("persists direct totals through the command bus and queues the resulting snapshot", async () => {
+    const repo = new IndexedDBHabitRepository(crypto.randomUUID());
+    const container = createHabitsModule(repo, async () => {});
+    try {
+      await container.commandBus.dispatch(new CreateHabit("c", { id, details: { ...details, target: 8 } }));
+      await container.commandBus.dispatch(new CheckInHabit("c", { id, day: localDate(), count: 5 }));
+      expect((await repo.pending())[0].entries[localDate()].count).toBe(5);
+      await expect(container.commandBus.dispatch(new CheckInHabit("c", { id, day: localDate(), count: 9 }))).rejects.toThrow("limit");
+      expect((await repo.find(id))!.toPrimitives().entries[localDate()].count).toBe(5);
+    } finally { await container.close(); await repo.close(); }
+  });
   it("upgrades schema 1 without losing habits or unsynced work and persists deletion metadata", async () => {
     const namespace = crypto.randomUUID();
     const model = Habit.create(id, details, "c").toPrimitives();

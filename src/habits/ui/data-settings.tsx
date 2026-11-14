@@ -59,10 +59,11 @@ export function DataSettings({ signedIn, disabled, deletionPending, habits, onPr
     } catch (error) { console.error("Data action failed:", error); setError(errorMessage(error)); }
     finally { setBusy(false); }
   }
-  return <section className="panel settings-panel">
+  return <section id="data-settings" className="panel settings-panel">
     <h2>{t("Backups and data controls")}</h2>
     <p className="muted mt-3 mb-4">{t("Export a backup before deleting data. Restoring merges habits and preserves newer edits; it never replaces your whole vault.")}</p>
     <button className="button secondary mb-4" disabled={busy || disabled} onClick={onExport}>{t("Download backup")}</button>
+    <p className="settings-hint">{t("Browser storage can be cleared by your browser or device. Export regularly, or connect cloud sync for a second copy.")}</p>
     <label className="field">{t("Choose JSON backup")}<input type="file" accept=".json,application/json" disabled={busy || disabled || deletionPending} onChange={event => { void read(event.target.files?.[0]); event.target.value = ""; }} /></label>
     {backup && <div className="configuration-note"><div><p>{t("Ready to merge {count} habits into the current vault.", { count: backup.length })}</p>
       {preview ? <><p>{t("{added} new · {merged} merged · {unchanged} unchanged · {blocked} deletion-blocked", { added: preview.added, merged: preview.merged, unchanged: preview.unchanged, blocked: preview.blocked })}</p>

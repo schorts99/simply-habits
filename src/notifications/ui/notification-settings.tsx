@@ -63,11 +63,11 @@ export function NotificationSettings({ user, habits, online, pending }: { user: 
     finally { setBusy(false); }
   }
   const canUse = loaded && supported && !!user && !!vapidPublicKey;
-  return <section className="panel settings-panel">
+  return <section id="reminder-settings" className="panel settings-panel">
     <div className="settings-heading"><span className="settings-symbol tint-lavender"><Bell size={24} /></span><div><h2>{t("A gentle nudge")}</h2><p className="muted">{t("Opt-in reminders, even when the app is closed.")}</p></div></div>
     <p>{t("Choose one reminder time per habit and an optional daily encouragement. Notifications keep habit names private on your lock screen.")}</p>
-    {!user && <p className="configuration-note">{t("Connect with Google above to schedule Web Push reminders.")}</p>}
-    {!vapidPublicKey && <p className="configuration-note">{t("Web Push needs VAPID keys and a server scheduler. See the project README for deployment setup.")}</p>}
+    {!user && <p className="configuration-note">{t("Sign in under Account to set up reminders.")}</p>}
+    {!vapidPublicKey && <p className="configuration-note">{t("Reminders are not available on this installation.")}</p>}
     {loaded && !supported && <p className="configuration-note">{t("Web Push is unavailable in this browser. On iPhone/iPad, use an installed home-screen app on iOS 16.4 or newer. HTTPS is required on deployed sites.")}</p>}
     {canUse && <div className="reminder-options">
       <label className="field">{t("Reminder timezone")}<input value={preferences.timezone} maxLength={100} onChange={e => setPreferences({ ...preferences, timezone: e.target.value })} /><span className="settings-hint">{t("IANA timezone, such as America/Denver. Daylight saving is handled automatically. Update this when you travel.")}</span></label>

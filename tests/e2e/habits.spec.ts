@@ -37,6 +37,67 @@ test("first-run onboarding focuses on one next step in English and Spanish", asy
 });
 
 for (const language of ["en", "es"]) {
+  test(`daily workflow supports direct totals, history and individual insights in ${language}`, async ({ page }) => {
+    await page.addInitScript(value => localStorage.setItem("simply-habits.language", value), language);
+    await page.goto("/");
+    await page.getByRole("button", { name: language === "en" ? "My progress" : "Mi progreso", exact: true }).click();
+    await expect(page.getByRole("heading", { name: language === "en" ? "Make room for your first habit." : "Haz espacio para tu primer hábito." })).toBeVisible();
+    await expect(page.locator(".heatmap")).toHaveCount(0);
+    await page.getByRole("button", { name: language === "en" ? "Settings" : "Ajustes", exact: true }).click();
+    const models = [
+      { id: crypto.randomUUID(), name: "Water", description: "", category: "Wellbeing", color: "blue", period: "Morning", target: 8, unit: "glasses", days: [0, 1, 2, 3, 4, 5, 6], created_on: "2026-01-01", updated_at: "2026-01-01T00:00:00.000Z", archived: false, entries: {} },
+      { id: crypto.randomUUID(), name: "Read", description: "", category: "Learning", color: "sage", period: "Evening", target: 10, unit: "pages", days: [0, 1, 2, 3, 4, 5, 6], created_on: "2026-01-01", updated_at: "2026-01-01T00:00:00.000Z", archived: false, entries: {} },
+    ];
+    await expect(page.locator(".settings-navigation a")).toHaveCount(4);
+    await expect(page.getByRole("button", { name: language === "en" ? "Download backup" : "Descargar copia", exact: true })).toHaveCount(1);
+    await page.locator('input[type="file"]').setInputFiles({ name: "habits.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ app: "Simply Habits", version: 1, habits: models })) });
+    await page.getByRole("button", { name: language === "en" ? "Restore backup" : "Restaurar copia", exact: true }).click();
+    await page.getByRole("button", { name: language === "en" ? "My progress" : "Mi progreso", exact: true }).click();
+    await expect(page.getByRole("heading", { name: language === "en" ? "Your story starts with a check-in." : "Tu historia empieza con un registro." })).toBeVisible();
+    await page.getByRole("button", { name: language === "en" ? "Go to today" : "Ir a hoy", exact: true }).click();
+    await expect(page.locator(".habit-period")).toHaveCount(2);
+    await expect(page.locator(".welcome-card")).toHaveCount(0);
+    const water = page.locator(".habit-card").filter({ has: page.getByRole("heading", { name: "Water", exact: true }) });
+    await water.locator(".quantity-toggle").click();
+    await water.getByRole("spinbutton").fill("5");
+    await water.getByRole("button", { name: language === "en" ? "Save total" : "Guardar total", exact: true }).click();
+    await expect(water.locator(".habit-progress")).toContainText("5 / 8");
+    await page.reload();
+    await expect(water.locator(".habit-progress")).toContainText("5 / 8");
+    await water.locator(".quantity-toggle").click();
+    await water.getByRole("spinbutton").fill("9");
+    await water.getByRole("button", { name: language === "en" ? "Save total" : "Guardar total", exact: true }).click();
+    expect(await water.getByRole("spinbutton").evaluate((element: HTMLInputElement) => element.validity.rangeOverflow)).toBe(true);
+    await expect(water.locator(".habit-progress")).toContainText("5 / 8");
+    await water.getByRole("spinbutton").fill("8");
+    await water.getByRole("button", { name: language === "en" ? "Save total" : "Guardar total", exact: true }).click();
+    await expect(page.locator(".recorded-habits")).not.toHaveAttribute("open");
+    await expect(water).not.toBeVisible();
+    await page.locator(".recorded-habits > summary").click();
+    await water.locator(".check-button").click();
+    await expect(water.locator(".habit-progress")).toContainText("7 / 8");
+    const today = await page.locator('input[type="date"]').inputValue();
+    await water.locator(".habit-week > button").nth(5).click();
+    const yesterday = await page.locator('input[type="date"]').inputValue();
+    expect(yesterday < today).toBe(true);
+    await expect(page.locator(".history-notice")).toBeVisible();
+    await water.locator(".quantity-toggle").click();
+    await water.getByRole("spinbutton").fill("3");
+    await water.getByRole("button", { name: language === "en" ? "Save total" : "Guardar total", exact: true }).click();
+    await page.getByRole("button", { name: language === "en" ? "Back to today" : "Volver a hoy", exact: true }).click();
+    await expect(water.locator(".habit-progress")).toContainText("7 / 8");
+    await page.locator('input[type="date"]').fill(yesterday);
+    await expect(water.locator(".habit-progress")).toContainText("3 / 8");
+    await page.getByRole("button", { name: language === "en" ? "My progress" : "Mi progreso", exact: true }).click();
+    await page.locator(".insight-filter select").selectOption(models[0].id);
+    await page.locator(".heatmap button").nth(82).click();
+    await expect(page.locator(".day-detail")).toContainText("3 / 8 glasses");
+    await expect(page.locator(".day-detail")).not.toContainText("Read");
+    await page.getByRole("button", { name: language === "en" ? "View this day" : "Ver este día", exact: true }).click();
+    await expect(page.locator('input[type="date"]')).toHaveValue(yesterday);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+
   test(`habit cards keep history and actions comfortably spaced in ${language}`, async ({ page }) => {
     await page.goto("/");
     if (language === "es") {
@@ -54,7 +115,7 @@ for (const language of ["en", "es"]) {
       const layout = await card.evaluate(element => {
         const history = element.querySelector(".habit-week")!.getBoundingClientRect();
         const controls = element.querySelector(".check-controls")!.getBoundingClientRect();
-        const buttons = Array.from(element.querySelectorAll("button"), button => {
+        const buttons = Array.from(element.querySelectorAll(".edit-button, .check-controls button, .quantity-toggle"), button => {
           const { width, height } = button.getBoundingClientRect();
           return { width, height };
         });
@@ -79,7 +140,66 @@ for (const language of ["en", "es"]) {
       expect(layout.fits, `no overflow at ${width}px`).toBe(true);
     }
   });
+
+  test(`progress ring labels stay inside the circle in ${language}`, async ({ page }) => {
+    await page.addInitScript(value => localStorage.setItem("simply-habits.language", value), language);
+    await page.goto("/");
+    await page.getByRole("button", { name: /Drink more water|Beber más agua/ }).click();
+    for (const percent of [0, 100]) {
+      if (percent === 100) {
+        await page.locator(".quantity-toggle").click();
+        await page.locator(".quantity-form input").fill("8");
+        await page.locator(".quantity-form button[type='submit']").click();
+      }
+      await expect(page.locator(".progress-ring strong")).toHaveText(`${percent}%`);
+      for (const width of [320, 390, 594, 820, 1440]) {
+        await page.setViewportSize({ width, height: 1000 });
+        const layout = await page.locator(".progress-ring").evaluate(element => {
+          const center = element.firstElementChild!;
+          const value = center.querySelector("strong")!;
+          const label = center.querySelector(":scope > span")!;
+          const bounds = center.getBoundingClientRect();
+          const number = value.getBoundingClientRect();
+          const caption = label.getBoundingClientRect();
+          const text = document.createRange();
+          text.selectNodeContents(label);
+          const radius = bounds.width / 2;
+          const cx = bounds.left + radius, cy = bounds.top + radius;
+          return {
+            gap: caption.top - number.bottom,
+            fits: Array.from(text.getClientRects()).every(rect => [
+              [rect.left, rect.top], [rect.right, rect.top], [rect.left, rect.bottom], [rect.right, rect.bottom],
+            ].every(([x, y]) => Math.hypot(x - cx, y - cy) <= radius - 4)),
+            overflow: label.scrollWidth > label.clientWidth || center.scrollHeight > center.clientHeight,
+          };
+        });
+        expect(layout.gap, `${percent}% number/label gap at ${width}px`).toBeGreaterThanOrEqual(6);
+        expect(layout.fits, `${percent}% label clears the circular edge at ${width}px`).toBe(true);
+        expect(layout.overflow, `${percent}% content fits at ${width}px`).toBe(false);
+      }
+    }
+  });
 }
+
+test("habit creation keeps customization optional and saves schedule presets", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create my own", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Habit name", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Category", exact: true })).not.toBeVisible();
+  await page.getByRole("textbox", { name: "Habit name", exact: true }).fill("Weekday walk");
+  await page.locator(".editor-options > summary").click();
+  await page.getByRole("button", { name: "Weekdays", exact: true }).click();
+  await page.getByRole("combobox", { name: "Time of day", exact: true }).selectOption("Afternoon");
+  await page.getByRole("button", { name: "Create habit", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download backup", exact: true }).click();
+  const stream = await (await downloadPromise).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const backup = JSON.parse(Buffer.concat(chunks).toString());
+  expect(backup.habits[0]).toMatchObject({ name: "Weekday walk", days: [1, 2, 3, 4, 5], period: "Afternoon" });
+});
 
 test("create, check in, undo, edit, archive/restore, export and offline persistence", async ({ page, context }) => {
   const errors: string[] = [];
@@ -99,12 +219,14 @@ test("create, check in, undo, edit, archive/restore, export and offline persiste
   await expect(page.locator(".daily-progress > p")).toContainText("1 of 1 habits complete");
   await page.reload();
   await expect(page.locator(".daily-progress > p")).toContainText("1 of 1 habits complete");
+  await page.locator(".recorded-habits > summary").click();
   await page.getByRole("button", { name: "Undo check-in for Launch verification habit", exact: true }).click();
   await expect(page.locator(".daily-progress > p")).toContainText("0 of 1 habits complete");
   await page.getByRole("button", { name: "Edit Launch verification habit", exact: true }).click();
   await page.getByRole("textbox", { name: "Habit name", exact: true }).fill("A verified little habit");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("heading", { name: "A verified little habit", exact: true })).toBeVisible();
+  await page.locator(".habit-filters > summary").click();
   await page.getByRole("textbox", { name: "Search habits", exact: true }).fill("no matching habit");
   await expect(page.getByText("Nothing here just yet.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
@@ -116,7 +238,7 @@ test("create, check in, undo, edit, archive/restore, export and offline persiste
   await page.getByRole("button", { name: "Restore", exact: true }).click();
   await expect(page.getByText("No habits on pause.", { exact: false })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export my habits", exact: true }).click();
+  await page.getByRole("button", { name: "Download backup", exact: true }).click();
   const download = await downloadPromise;
   const stream = await download.createReadStream();
   const buffers: Buffer[] = [];
@@ -165,7 +287,7 @@ test("SEO, PWA assets, opt-in notification states, no automatic permission reque
   expect(unauthenticated.status()).toBe(401);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "A gentle nudge", exact: true })).toBeVisible();
-  await expect(page.getByText("Connect with Google above to schedule Web Push reminders.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Sign in under Account to set up reminders.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Enable notifications", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => Reflect.get(window, "__permissionRequests"))).toBe(0);
   await page.getByRole("button", { name: "Install app", exact: true }).click();

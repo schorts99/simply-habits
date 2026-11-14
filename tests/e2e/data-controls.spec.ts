@@ -4,14 +4,14 @@ test("backup preview, merge, permanent deletion and local clear work offline", a
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
-  await page.getByRole("button", { name: "New habit", exact: true }).click();
+  await page.getByRole("button", { name: "Create my own", exact: true }).click();
   await page.getByRole("textbox", { name: "Habit name", exact: true }).fill("Backup habit");
   await page.getByRole("spinbutton", { name: "Daily target" }).fill("2");
   await page.getByRole("button", { name: "Create habit", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Backup habit", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export my habits", exact: true }).click();
+  await page.getByRole("button", { name: "Download backup", exact: true }).click();
   const stream = await (await downloadPromise).createReadStream();
   const chunks: Buffer[] = [];
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));

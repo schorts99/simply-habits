@@ -66,17 +66,27 @@ export function HabitEditor({ habit, onClose, onSave, onArchive, onDelete }: {
       {habit && <p className="muted text-sm mb-4">{t("Create a new habit to change its type.")}</p>}
       {details.kind === "quit" && <p className="muted text-sm mb-4">{t("Quit habits repeat every day. Record success or a lapse; unrecorded days stay unknown.")}</p>}
       <label className="field">{t("Habit name")}<input autoFocus required maxLength={80} placeholder={t("e.g. Take a mindful walk")} value={details.name} onChange={e => setDetails({ ...details, name: e.target.value })} /></label>
+      {details.kind !== "quit" && <div className="editor-field-row grid grid-cols-[1fr_2fr] gap-4">
+        <label className="field">{t("Daily target")}<input type="number" min={1} max={1000} required value={details.target} onChange={e => setDetails({ ...details, target: Number(e.target.value) })} /></label>
+        <label className="field">{t("Unit")}<input required maxLength={24} placeholder={t("glasses, pages, minutes...")} value={details.unit} onChange={e => setDetails({ ...details, unit: e.target.value })} /></label>
+      </div>}
+      <details className="editor-options" open={!!habit}>
+      <summary>{t("More options")}</summary>
+      <p className="muted">{t("Personalize your schedule, category, and color.")}</p>
       <label className="field">{t("A little why")} <span className="optional">{t("(optional)")}</span><input maxLength={240} placeholder={t("What will this make space for?")} value={details.description} onChange={e => setDetails({ ...details, description: e.target.value })} /></label>
       <div className={`editor-field-row grid ${details.kind === "quit" ? "grid-cols-1" : "grid-cols-2"} gap-4`}>
         <label className="field">{t("Category")}<select value={details.category} onChange={e => { const category = CATEGORIES.find(c => c === e.target.value); if (category) setDetails({ ...details, category }); }}>{CATEGORIES.map(c => <option key={c} value={c}>{t(c)}</option>)}</select></label>
         {details.kind !== "quit" && <label className="field">{t("Time of day")}<select value={details.period} onChange={e => { const period = PERIODS.find(p => p === e.target.value); if (period) setDetails({ ...details, period }); }}>{PERIODS.map(p => <option key={p} value={p}>{t(p)}</option>)}</select></label>}
       </div>
-      {details.kind !== "quit" && <div className="editor-field-row grid grid-cols-[1fr_2fr] gap-4">
-        <label className="field">{t("Daily target")}<input type="number" min={1} max={1000} required value={details.target} onChange={e => setDetails({ ...details, target: Number(e.target.value) })} /></label>
-        <label className="field">{t("Unit")}<input required maxLength={24} placeholder={t("glasses, pages, minutes...")} value={details.unit} onChange={e => setDetails({ ...details, unit: e.target.value })} /></label>
-      </div>}
-      {details.kind !== "quit" && <fieldset className="field"><legend>{t("Repeat on")}</legend><div className="day-options">{[1, 2, 3, 4, 5, 6, 0].map(day => <button type="button" key={day} aria-pressed={details.days.includes(day)} className={details.days.includes(day) ? "selected" : ""} onClick={() => setDetails({ ...details, days: details.days.includes(day) ? details.days.filter(d => d !== day) : [...details.days, day].sort() })}>{t(weekdays[day])}</button>)}</div></fieldset>}
+      {details.kind !== "quit" && <fieldset className="field"><legend>{t("Repeat on")}</legend>
+        <div className="schedule-presets">{[
+          { label: "Every day", days: [0, 1, 2, 3, 4, 5, 6] },
+          { label: "Weekdays", days: [1, 2, 3, 4, 5] },
+          { label: "Weekends", days: [0, 6] },
+        ].map(preset => <button type="button" key={preset.label} aria-pressed={details.days.length === preset.days.length && preset.days.every(day => details.days.includes(day))} onClick={() => setDetails({ ...details, days: preset.days })}>{t(preset.label)}</button>)}</div>
+        <div className="day-options">{[1, 2, 3, 4, 5, 6, 0].map(day => <button type="button" key={day} aria-pressed={details.days.includes(day)} className={details.days.includes(day) ? "selected" : ""} onClick={() => setDetails({ ...details, days: details.days.includes(day) ? details.days.filter(d => d !== day) : [...details.days, day].sort() })}>{t(weekdays[day])}</button>)}</div></fieldset>}
       <fieldset className="field"><legend>{t("A splash of color")}</legend><div className="flex gap-3">{COLORS.map(color => <button key={color} type="button" className={`color-option tint-${color}`} aria-label={t(`${color} color`)} aria-pressed={details.color === color} onClick={() => setDetails({ ...details, color })}>{details.color === color && <Check size={18} />}</button>)}</div></fieldset>
+      </details>
       {error && <p role="alert" className="form-error">{error}</p>}
       {habit && <div className="archive-area">{confirmArchive ? <><p>{t("Your history stays safe. You can restore this habit in Settings.")}</p><button type="button" className="text-button danger" disabled={busy} onClick={archive}>{t("Yes, archive this habit")}</button><button type="button" className="text-button ml-4" onClick={() => setConfirmArchive(false)}>{t("Keep it")}</button></> : <button type="button" className="text-button danger" onClick={() => setConfirmArchive(true)}>{t("Archive habit")}</button>}</div>}
       {habit && <div className="archive-area">{confirmDelete ? <><p>{t("Export first. Deleting removes this habit’s content and history. A minimal deletion marker prevents old devices or backups from bringing it back.")}</p><button type="button" className="text-button danger" disabled={busy} onClick={remove}>{t("Yes, permanently delete")}</button><button type="button" className="text-button ml-4" disabled={busy} onClick={() => setConfirmDelete(false)}>{t("Cancel")}</button></> : <button type="button" className="text-button danger" disabled={busy} onClick={() => setConfirmDelete(true)}>{t("Delete habit permanently")}</button>}</div>}

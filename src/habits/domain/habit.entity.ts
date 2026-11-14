@@ -112,14 +112,18 @@ export class Habit extends Entity<HabitId, HabitModel> {
   }
 
   checkIn(day: string, delta: number, correlationId: string, today = localDate()): void {
+    if (delta !== 1 && delta !== -1) throw new InvalidHabit("A check-in changes progress by one.");
+    this.setCount(day, (this.data.entries[day]?.count ?? 0) + delta, correlationId, today);
+  }
+
+  setCount(day: string, count: number, correlationId: string, today = localDate()): void {
     if (this.data.kind === "quit") throw new InvalidHabit("Choose success or lapse for a quit habit.");
     if (this.data.deleted) throw new InvalidHabit("This habit has been deleted.");
     if (!isCalendarDate(day) || day > today || day < this.data.created_on) throw new InvalidHabit("Check-ins must be on or after the habit's start date, and not in the future.");
     if (this.data.archived || !this.data.days.includes(weekday(day))) throw new InvalidHabit("This habit isn't scheduled for that day.");
-    if (delta !== 1 && delta !== -1) throw new InvalidHabit("A check-in changes progress by one.");
     const previous = this.data.entries[day];
     const target = previous?.target ?? this.data.target;
-    const count = (previous?.count ?? 0) + delta;
+    if (!Number.isInteger(count)) throw new InvalidHabit("Progress must be a whole number.");
     if (count < 0 || count > target) throw new InvalidHabit("Your progress is already at its limit.");
     this.data.entries[day] = { count, target, updated_at: this.nextStamp() };
     this.changed("checked-in", correlationId);
